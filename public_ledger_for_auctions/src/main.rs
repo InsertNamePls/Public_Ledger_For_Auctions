@@ -25,7 +25,7 @@ fn main() {
         let previous_block = blockchain.blocks.last().unwrap();
         let mut new_block = Block{
             index:i,
-            prev_hash: previous_block.prev_hash.clone(),
+            prev_hash: previous_block.hash.clone(),
             nounce: 0,
             timestamp: Utc::now().timestamp_millis(),
             tx: format!("{} trasaction block ", i) as String,
@@ -33,7 +33,8 @@ fn main() {
 
         };
         new_block.mine_block(DIFICULTY);
+        validate_block(&new_block, previous_block, DIFICULTY);
         blockchain.add_block(new_block);
+        println!("{:?}", blockchain.blocks[i as usize])
     }
-    println!("{:?}", blockchain.blocks)
 }
