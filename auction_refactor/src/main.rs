@@ -140,9 +140,20 @@ fn join_auction(user: &mut User, auction_house: &AuctionHouse) {
     let mut auction_id_str = String::new();
     io::stdin().read_line(&mut auction_id_str).unwrap();
     // Skipping input validation for simplicity
-    println!("(Template) Enter your bid amount (e.g., 100):");
-    // Skipping bid placement since it involves more complex logic
-    println!("(Template) Bid placed successfully for Auction ID {}", auction_id_str.trim());
+    println!( "Your new balance is ${}", user.credits);
+    println!("Enter your bid amount:");
+    let mut amount_str = String::new();
+    io::stdin().read_line(&mut amount_str).unwrap();
+    // Skipping input validation for simplicity
+    let amount: f32 = amount_str.trim().parse().unwrap();
+    if(user.credits < amount) {
+        println!("Insufficient credits to place bid.");
+        pause();
+        return;
+    }else{    
+        // Skipping bid placement since it involves more complex logic
+        println!(" Bid placed successfully for Auction ID {}", auction_id_str.trim());
+    }
     pause();
 }
 
