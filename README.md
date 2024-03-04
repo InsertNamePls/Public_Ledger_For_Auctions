@@ -4,6 +4,28 @@
 ### Algorithm
 
 ### Public Ledger
+# Introduction
+
+This project embarks on the ambitious task of implementing a public, non-permissioned blockchain, distinct from the likes of Bitcoin and Ethereum. Its core objective is to establish a decentralized public ledger, meticulously designed to record auction transactions. Unlike conventional blockchain applications focused primarily on financial transactions, this initiative pivots towards creating a transparent and secure platform for auctioneering, blending the realms of blockchain technology with the dynamic world of auctions.
+
+The development of this blockchain is structured into three pivotal components, each serving a distinct yet interconnected function within the ecosystem:
+
+- **Distributed Ledger**: At the heart of this project lies the secure ledger, a modular entity that embraces flexibility by supporting both Proof of Work (PoW) and Delegated Proof of Stake (DPoS) as its cornerstone consensus mechanisms. This dual approach allows for:
+  - Integration of **Proof of Work (PoW)**, emphasizing computational commitment and security.
+  - Incorporation of **Proof of Stake (PoS)** mechanisms, leveraging stake-based voting and reputation systems to enhance network integrity.
+
+- **Secure P2P Communication Layer**: Essential to the ledger's operation is a robust Peer-to-Peer (P2P) network layer. This layer is tasked with disseminating transaction data across the blockchain, ensuring that information is both secure and universally accessible. Key features include:
+  - Implementation of **S/Kademlia** protocol, enhancing network efficiency and node discoverability.
+  - Mechanisms to thwart **Sybil and Eclipse attacks**, safeguarding the network against malicious entities.
+  - Integration of **trust mechanisms** within the PoS framework, fostering a reliable and cooperative network environment.
+
+- **Auction System**: Central to this project is the auction mechanism, designed to facilitate interactions between sellers and buyers through a single attribute auction model, reminiscent of the English auction system. This component is characterized by:
+  - Storing transactions within the blockchain using **public-key cryptography**, ensuring the authenticity and integrity of auction data.
+  - A **publisher/subscriber model** built atop the Kademlia protocol to efficiently manage auction events, enhancing user experience and participation.
+
+- **Fault Injection Mechanism**: To demonstrate the system's resilience and robustness, a fault injection mechanism is incorporated, allowing for the controlled shutdown of nodes. This feature is crucial for validating the system's durability and its capacity to withstand and recover from adverse conditions.
+
+Together, these components synergize to form a comprehensive blockchain solution tailored for the auction industry, promising a revolution in how auctions are conducted, perceived, and trusted on a global scale.
 
 **Task:**
 - Test encryption and signing messages with public and private keys.
