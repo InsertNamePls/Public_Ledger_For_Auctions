@@ -1,8 +1,9 @@
 mod user;
 mod auction;
-
+use crate::auction::Auction;
+use chrono::Duration;
 use user::User;
-use auction::AuctionHouse;
+use crate::auction::{AuctionHouse, generate_initial_auction_data, load_auction_data, save_auction_data};
 use std::io::{self, Write};
 use chrono::Utc;
 
@@ -17,7 +18,14 @@ fn clear_screen() {
 }
 
 fn main() {
-    let mut auction_house = AuctionHouse::new();
+    let mut auction_house = match load_auction_data() {
+        Ok(data) => data,
+        Err(_) => {
+            let initial_data = generate_initial_auction_data(); // for testing purposes later change.
+            save_auction_data(&initial_data).expect("Failed to save initial auction data");
+            initial_data
+        },
+    };
     clear_screen();
 
     println!("Welcome to the BidBuddie's Auction System!");
@@ -81,7 +89,7 @@ fn auctions_menu(user: &mut User, auction_house: &mut AuctionHouse) {
 
         match option.trim() {
             "1" => join_auction(user, auction_house),
-            "2" => create_auction(user, auction_house),
+            "2" => create_auction(&user, auction_house),
             "3" => current_auctions(user, auction_house),
             "4" => history(user),
             "5" => break,
@@ -161,42 +169,76 @@ fn add_credits(user: &mut User) {
     // Implementation for adding credits to the user's account
 }
 
-fn join_auction(user: &mut User, auction_house: &AuctionHouse) {
+fn join_auction(user: &mut User, auction_house: &mut AuctionHouse) {
     clear_screen();
+
     println!("Active Auctions:");
-    // Assuming list_active_auctions just prints out auctions for now
     auction_house.list_active_auctions();
-    println!("(Template) Enter the Auction ID you want to join (e.g., 1):");
+
+    println!("Enter the Auction ID you want to join:");
     let mut auction_id_str = String::new();
     io::stdin().read_line(&mut auction_id_str).unwrap();
     // Skipping input validation for simplicity
-    println!( "Your balance: ${}", user.credits);
+    println!( "Your new balance is ${}", user.credits);
+    let auction_id: u32 = auction_id_str.trim().parse().expect("Please enter a valid ID");
+
+    println!("Your balance: ${}", user.credits);
     println!("Enter your bid amount:");
     let mut amount_str = String::new();
     io::stdin().read_line(&mut amount_str).unwrap();
-    // Skipping input validation for simplicity
-    let amount: f32 = amount_str.trim().parse().unwrap();
-    if(user.credits < amount) {
+    let amount: f32 = amount_str.trim().parse().expect("Please enter a valid number");
+
+    if user.credits >= amount {
+        if let Ok(_) = auction_house.place_bid(auction_id, user.identifier.clone(), amount) {
+            println!("Bid placed successfully for Auction ID {}", auction_id);
+            user.credits -= amount; // Update user credits
+            save_auction_data(auction_house).expect("Failed to save auction data");
+        } else {
+            println!("Failed to place bid. Auction might not exist or be closed.");
+        }
+    } else {
         println!("Insufficient credits to place bid.");
-        pause();
-        return;
-    }else{    
-        // Skipping bid placement since it involves more complex logic
-        println!(" Bid placed successfully for Auction ID {}", auction_id_str.trim());
     }
     pause();
 }
 
-fn create_auction(user: &mut User, auction_house: &mut AuctionHouse) {
+
+fn create_auction(user: &User, auction_house: &mut AuctionHouse) {
     clear_screen();
-    println!("(Template) Creating a new auction with predefined values.");
-    // Example values
-    let item_name = "Test Item";
-    let starting_bid: f32 = 50.0;
-    // Normally, you'd capture user input here
-    println!("Auction for '{}' with starting bid of ${} created successfully!", item_name, starting_bid);
+    println!("Creating a new auction.");
+    println!("Enter the item name:");
+    let mut item_name = String::new();
+    io::stdin().read_line(&mut item_name).expect("Failed to read line");
+
+    println!("Enter the starting bid:");
+    let mut starting_bid_str = String::new();
+    io::stdin().read_line(&mut starting_bid_str).expect("Failed to read line");
+    let starting_bid: f32 = starting_bid_str.trim().parse().expect("Please enter a valid number");
+
+    let start_time = Utc::now();
+    println!("Enter the auction duration in days:");
+    let mut duration_str = String::new();
+    io::stdin().read_line(&mut duration_str).expect("Failed to read line");
+    let duration: i64 = duration_str.trim().parse().expect("Please enter a valid number of days");
+    let end_time = start_time + Duration::days(duration);
+
+    // Use user.identifier to pass the creator's identifier to the new auction
+    let auction_id = auction_house.generate_auction_id();
+    let auction = Auction::new(
+        auction_id,
+        item_name.trim().to_string(),
+        start_time,
+        end_time,
+        starting_bid,
+        user.identifier.clone(), // Pass the user's identifier as the creator
+    );
+
+    auction_house.add_auction(auction);
+    save_auction_data(auction_house).expect("Failed to save auction data");
+    println!("Auction created successfully!");
     pause();
 }
+
 
 fn current_auctions(user: &User, auction_house: &AuctionHouse) {
     clear_screen();
