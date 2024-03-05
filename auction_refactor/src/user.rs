@@ -1,7 +1,6 @@
 use crate::auction::{Auction, AuctionHouse};
 use std::collections::HashMap;
-use std::fs;
-use std::io::{self, Write};
+use std::io::{Write};
 use chrono::{DateTime, Utc};
 
 #[derive(Debug, Clone)]
@@ -48,11 +47,6 @@ impl User {
         }
     }
 
-    pub fn create_auction(&self, auction_house: &mut AuctionHouse, item_name: String, start_time: DateTime<Utc>, end_time: DateTime<Utc>, starting_bid: f32) -> u32 {
-        let auction = Auction::new(auction_house.generate_auction_id(), item_name, start_time, end_time, starting_bid);
-        auction_house.add_auction(auction);
-        auction_house.get_latest_auction_id()
-    }
 
     pub fn place_bid_with_auction_house(&mut self, auction_house: &mut AuctionHouse, auction_id: u32, bid_amount: f32) -> Result<(), &'static str> {
         if self.credits < bid_amount {

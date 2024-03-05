@@ -1,0 +1,24 @@
+{
+  "auctions": {
+    "2": {
+      "id": 2,
+      "item_name": "Banana",
+      "start_time": 1709599316,
+      "end_time": 1710463316,
+      "starting_bid": 1000.0,
+      "bids": [],
+      "active": true,
+      "user_id": "Ze"
+    },
+    "1": {
+      "id": 1,
+      "item_name": "Example Item",
+      "start_time": 1709599280,
+      "end_time": 1709685680,
+      "starting_bid": 50.0,
+      "bids": [],
+      "active": true,
+      "user_id": "example_user"
+    }
+  }
+}
