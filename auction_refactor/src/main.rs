@@ -170,7 +170,7 @@ fn join_auction(user: &mut User, auction_house: &AuctionHouse) {
     let mut auction_id_str = String::new();
     io::stdin().read_line(&mut auction_id_str).unwrap();
     // Skipping input validation for simplicity
-    println!( "Your new balance is ${}", user.credits);
+    println!( "Your balance: ${}", user.credits);
     println!("Enter your bid amount:");
     let mut amount_str = String::new();
     io::stdin().read_line(&mut amount_str).unwrap();
