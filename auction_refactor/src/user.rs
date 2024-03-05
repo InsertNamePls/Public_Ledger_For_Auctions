@@ -1,5 +1,7 @@
 use crate::auction::{Auction, AuctionHouse};
 use std::collections::HashMap;
+use std::fs;
+use std::io::{self, Write};
 use chrono::{DateTime, Utc};
 
 #[derive(Debug, Clone)]
@@ -10,17 +12,19 @@ enum AuctionActivity {
 
 #[derive(Debug)]
 pub struct User {
-    pub identifier: String,
-    pub credits: f32,
-    pub participated_auctions: HashMap<u32, Vec<AuctionActivity>>,
+    pub identifier: String, //saved the user identifier
+    pub credits: f32, //saved the user credits
+    pub participated_auctions: HashMap<u32, Vec<AuctionActivity>>, //saved the user participated auctions
+    pub ssh_key_path: String, //Field to store the path to the SSH public key
 }
 
 impl User {
-    pub fn new(identifier: String) -> Self {
+    pub fn new(identifier: String, ssh_key_path: String) -> Self {
         User {
             identifier,
             credits: 0.0,
             participated_auctions: HashMap::new(),
+            ssh_key_path,
         }
     }
 
@@ -61,5 +65,18 @@ impl User {
             },
             Err(e) => Err(e),
         }
+    }
+
+    pub fn store_ssh_key(&self) -> std::io::Result<()> {
+          // Reading the SSH public key from the provided path
+          let ssh_key = std::fs::read_to_string(&self.ssh_key_path)?;
+        
+          // Creating a file name based on the user identifier
+          let file_name = format!("{}-ssh_key.pub", self.identifier);
+          
+          // Creating and writing the SSH public key to the file
+          let mut file = std::fs::File::create(&file_name)?;
+          file.write_all(ssh_key.as_bytes())?;
+          Ok(())
     }
 }
