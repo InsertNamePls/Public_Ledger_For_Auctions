@@ -19,11 +19,24 @@ fn clear_screen() {
 fn main() {
     let mut auction_house = AuctionHouse::new();
     clear_screen();
+
     println!("Welcome to the BidBuddie's Auction System!");
-    println!("Enter your username:");
+    println!("Please register your Username:");
     let mut username = String::new();
     io::stdin().read_line(&mut username).expect("Failed to read line");
-    let mut user = User::new(username.trim().to_string());
+   
+    println!("Enter the path to your SSH key:");
+    let mut ssh_key_path = String::new();
+    io::stdin().read_line(&mut ssh_key_path).expect("Failed to read line");
+
+
+    let mut user = User::new(username.trim().to_string(), ssh_key_path.trim().to_string());
+
+    // After creating the user, store the SSH key
+    if let Err(e) = user.store_ssh_key() {
+        eprintln!("Failed to store SSH key: {}", e);
+    }
+    
 
     loop {
         clear_screen();
@@ -110,11 +123,28 @@ fn view_profile(user: &User) {
     println!("User Profile:");
     println!("Username: {}", user.identifier);
     println!("Credits: ${}", user.credits);
+
+    // Attempting to read the SSH public key from the provided path
+    let ssh_key_result = std::fs::read_to_string(&user.ssh_key_path);
+
+    // Handling the Result to safely access the SSH public key content
+    match ssh_key_result {
+        Ok(ssh_key) => {
+            // If reading was successful, print the SSH public key
+            println!("SSH Key Path: {}", user.ssh_key_path);
+            println!("SSH Public Key Content:\n{}", ssh_key);
+        },
+        Err(e) => {
+            // If there was an error reading the file, print an error message instead
+            println!("Failed to read SSH public key from '{}': {}", user.ssh_key_path, e);
+        },
+    }
+
+    // Displaying the user's participated auctions:
+    println!("Participated Auctions:");
     user.list_participated_auctions();
 
     pause();
-
-    // Implementation for viewing the user profile
 }
 
 fn add_credits(user: &mut User) {
