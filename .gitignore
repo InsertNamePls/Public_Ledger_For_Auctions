@@ -12,3 +12,6 @@ Cargo.lock
 
 # MSVC Windows builds of rustc generate these, which store debugging information
 *.pdb
+
+# Directory to store public SSH keys - ignored by Git
+public_ssh_key/

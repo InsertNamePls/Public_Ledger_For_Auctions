@@ -172,21 +172,44 @@ fn add_credits(user: &mut User) {
 fn join_auction(user: &mut User, auction_house: &mut AuctionHouse) {
     clear_screen();
 
+    
     println!("Active Auctions:");
     auction_house.list_active_auctions();
 
-    println!("Enter the Auction ID you want to join:");
-    let mut auction_id_str = String::new();
-    io::stdin().read_line(&mut auction_id_str).unwrap();
-    // Skipping input validation for simplicity
-    println!( "Your new balance is ${}", user.credits);
-    let auction_id: u32 = auction_id_str.trim().parse().expect("Please enter a valid ID");
+    let mut auction_id = 0;
+    loop {
+        println!("Enter the Auction ID you want to join (or 'exit' to cancel):");
+        let mut auction_id_str = String::new();
+        io::stdin().read_line(&mut auction_id_str).expect("Failed to read line");
 
+        // Trim the input and check if the user wants to exit this prompt
+        let trimmed_input = auction_id_str.trim();
+        if trimmed_input.eq_ignore_ascii_case("exit") {
+            return;
+        }
+
+        // Attempt to parse the input as an integer
+        match trimmed_input.parse::<u32>() {
+            Ok(id) => {
+                auction_id = id;
+                break; // Exit the loop on successful parse
+            },
+            Err(_) => println!("Please enter a valid ID or 'exit' to cancel."),
+        }
+    }
+
+    // Proceed with the rest of the function using the valid `auction_id`
     println!("Your balance: ${}", user.credits);
     println!("Enter your bid amount:");
     let mut amount_str = String::new();
     io::stdin().read_line(&mut amount_str).unwrap();
-    let amount: f32 = amount_str.trim().parse().expect("Please enter a valid number");
+    let amount: f32 = match amount_str.trim().parse() {
+        Ok(num) => num,
+        Err(_) => {
+            println!("Please enter a valid bid amount.");
+            return;
+        },
+    };
 
     if user.credits >= amount {
         if let Ok(_) = auction_house.place_bid(auction_id, user.identifier.clone(), amount) {
@@ -242,17 +265,16 @@ fn create_auction(user: &User, auction_house: &mut AuctionHouse) {
 
 fn current_auctions(user: &User, auction_house: &AuctionHouse) {
     clear_screen();
-    println!("(Template) Your Current Auctions:");
-    // Display some template data
-    println!("Auction ID: 1, Item: Test Item, Bid: $100");
+    println!("Active Auctions:");
+    auction_house.list_active_auctions();
     pause();
 }
 
 fn history(user: &User) {
     clear_screen();
-    println!("(Template) Auction History:");
-    // Display some template history data
-    println!("Auction ID: 1, Item: Old Item, Your Bid: $90, Status: Won");
+    println!("Participated Auctions:");
+    user.list_participated_auctions();
+    
     pause();
 }
 
