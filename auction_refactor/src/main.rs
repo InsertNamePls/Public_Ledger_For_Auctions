@@ -1,11 +1,20 @@
 mod user;
 mod auction;
-use crate::auction::Auction;
+
 use chrono::Duration;
 use user::User;
-use crate::auction::{AuctionHouse, generate_initial_auction_data, load_auction_data, save_auction_data};
-use std::io::{self, Write};
+use std::collections::HashMap;
+
+
+use std::io::{self, Write,Read};
+use std::path::Path;
 use chrono::Utc;
+use std::fs::{self, File};
+use serde::{Serialize, Deserialize};
+
+use crate::auction::{AuctionHouse, generate_initial_auction_data, load_auction_data, save_auction_data};
+use crate::auction::Auction;
+
 
 #[cfg(target_os = "windows")]
 fn clear_screen() {
@@ -18,7 +27,6 @@ fn clear_screen() {
 }
 
 fn main() {
-
     // Change this for a scrapping function later on
     let mut auction_house = match load_auction_data() {
         Ok(data) => data,
@@ -79,18 +87,20 @@ fn login() -> User {
 }
 
 fn register_user() -> User {
-    // Prompt for and read the username
     println!("Please enter your Username:");
     let mut username = String::new();
     io::stdin().read_line(&mut username).expect("Failed to read line");
 
-    // Prompt for and read the path to the SSH key
     println!("Enter the path to your SSH key:");
     let mut ssh_key_path = String::new();
     io::stdin().read_line(&mut ssh_key_path).expect("Failed to read line");
 
-    // Create a new User instance with the provided username and SSH key path
-    let mut user = User::new(username.trim().to_string(), ssh_key_path.trim().to_string());
+    let user = User {
+        identifier: username.trim().to_string(),
+        credits: 0.0,
+        participated_auctions: HashMap::new(),
+        ssh_key_path: ssh_key_path.trim().to_string(),
+    };
 
     // Attempt to store the SSH key, reporting any errors encountered
     match user.store_ssh_key() {
@@ -98,14 +108,24 @@ fn register_user() -> User {
         Err(e) => println!("Failed to store SSH key: {}", e),
     }
 
-    // Return the newly registered user
-    println!("Registering new user...");
-    user
+    // Path to the JSON file where users are stored
+    let file_path = "users.json";
+    let mut users = Vec::new();
+
+    // Check if file exists and read the existing users
+    if Path::new(file_path).exists() {
+        let data = fs::read_to_string(file_path).expect("Failed to read users.json");
+        users = serde_json::from_str(&data).expect("Failed to deserialize users");
+    }
+
+    // Add the new user to the vector and write it back to the file
+    users.push(user.clone()); // Clone user for push to avoid move
+    let users_json = serde_json::to_string_pretty(&users).expect("Failed to serialize users");
+    fs::write(file_path, users_json).expect("Failed to write to users.json");
+
+    println!("User registered successfully.");
+    user // Return the original user, not moved thanks to clone
 }
-
-
-
- 
 
 fn auctions_menu(user: &mut User, auction_house: &mut AuctionHouse) {
     loop {

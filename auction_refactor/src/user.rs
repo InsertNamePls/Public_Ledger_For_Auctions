@@ -4,20 +4,21 @@ use std::io::{Write};
 use std::path::Path;
 use std::fs::{self, File};
 use chrono::{DateTime, Utc};
+use serde::{Serialize, Deserialize};
 
-
-#[derive(Debug, Clone)]
-enum AuctionActivity {
+// The AuctionActivity enum is used to store the activities of the user in the auctions.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum AuctionActivity {
     Created(u32), // Contains Auction ID
     Bid(u32, f32), // Contains Auction ID and bid amount
 }
 
-#[derive(Debug,Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct User {
-    pub identifier: String, //saved the user identifier
-    pub credits: f32, //saved the user credits
-    pub participated_auctions: HashMap<u32, Vec<AuctionActivity>>, //saved the user participated auctions
-    pub ssh_key_path: String, //Field to store the path to the SSH public key
+    pub identifier: String,
+    pub credits: f32,
+    pub participated_auctions: HashMap<u32, Vec<AuctionActivity>>,
+    pub ssh_key_path: String,
 }
 
 impl User {
@@ -49,7 +50,6 @@ impl User {
             }
         }
     }
-
 
     pub fn place_bid_with_auction_house(&mut self, auction_house: &mut AuctionHouse, auction_id: u32, bid_amount: f32) -> Result<(), &'static str> {
         if self.credits < bid_amount {
