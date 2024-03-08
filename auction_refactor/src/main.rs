@@ -80,11 +80,42 @@ fn main() {
 }
 
 fn login() -> User {
-    // Implementation for logging in a user
-    // For simplicity, returning a dummy user
-    println!("Logging in...");
-    User::new("user123".to_string(), "/path/to/ssh_key".to_string())
+    println!("Please enter your Username:");
+    let mut username = String::new();
+    io::stdin().read_line(&mut username).expect("Failed to read line");
+    let username = username.trim();
+
+    println!("Enter the path to your SSH key:");
+    let mut ssh_key_path = String::new();
+    io::stdin().read_line(&mut ssh_key_path).expect("Failed to read line");
+    let ssh_key_path = ssh_key_path.trim();
+
+    // Load users from "users.json"
+    let users = load_users_from_file("users.json").expect("Failed to load users");
+
+    // Attempt to find the user with the given identifier and ssh_key_path
+    for user in users {
+        if user.identifier == username && user.ssh_key_path == ssh_key_path {
+            println!("Login successful for user: {}", username);
+            return user;
+        }
+    }
+    clear_screen();
+    println!("Login failed. Username or SSH key path does not match.");
+    login() // Retry login
 }
+
+fn load_users_from_file(file_path: &str) -> Result<Vec<User>, serde_json::Error> {
+    let data = match fs::read_to_string(file_path) {
+        Ok(data) => data,
+        Err(_) => {
+            println!("No existing users found or unable to read the file.");
+            return Ok(vec![]);
+        },
+    };
+    serde_json::from_str(&data)
+}
+
 
 fn register_user() -> User {
     println!("Please enter your Username:");
