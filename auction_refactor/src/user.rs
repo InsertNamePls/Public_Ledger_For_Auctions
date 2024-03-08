@@ -33,6 +33,27 @@ impl User {
 
     pub fn add_credits(&mut self, amount: f32) {
         self.credits += amount;
+        self.update_user_file();
+    }
+
+    pub fn update_user_file(&self) {
+        // The path to the 'users.json' file
+        let file_path = "users.json";
+
+        // Read the entire file and deserialize it into Vec<User>
+        let file_content = fs::read_to_string(file_path).unwrap();
+        let mut users: Vec<User> = serde_json::from_str(&file_content).unwrap();
+
+        // Find the user in the vector and update their information
+        if let Some(user) = users.iter_mut().find(|u| u.identifier == self.identifier) {
+            *user = self.clone();
+        }
+
+        // Serialize the entire vector back to JSON
+        let updated_content = serde_json::to_string_pretty(&users).unwrap();
+
+        // Write the updated JSON back to the file, replacing the old content
+        fs::write(file_path, updated_content).unwrap();
     }
 
     pub fn register_auction_activity(&mut self, auction_id: u32, activity: AuctionActivity) {
@@ -49,6 +70,12 @@ impl User {
                 println!("  Activity: {:?}", activity);
             }
         }
+    }
+
+    pub fn provide_ssh_key(&self) -> std::io::Result<String> {
+        // Reading the SSH public key from the provided path
+        let ssh_key = fs::read_to_string(&self.ssh_key_path)?;
+        Ok(ssh_key)
     }
 
     pub fn place_bid_with_auction_house(&mut self, auction_house: &mut AuctionHouse, auction_id: u32, bid_amount: f32) -> Result<(), &'static str> {
