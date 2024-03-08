@@ -1,11 +1,20 @@
 mod user;
 mod auction;
-use crate::auction::Auction;
+
 use chrono::Duration;
 use user::User;
-use crate::auction::{AuctionHouse, generate_initial_auction_data, load_auction_data, save_auction_data};
-use std::io::{self, Write};
+use std::collections::HashMap;
+
+
+use std::io::{self, Write,Read};
+use std::path::Path;
 use chrono::Utc;
+use std::fs::{self, File};
+use serde::{Serialize, Deserialize};
+
+use crate::auction::{AuctionHouse, generate_initial_auction_data, load_auction_data, save_auction_data};
+use crate::auction::Auction;
+
 
 #[cfg(target_os = "windows")]
 fn clear_screen() {
@@ -18,6 +27,7 @@ fn clear_screen() {
 }
 
 fn main() {
+    // Change this for a scrapping function later on
     let mut auction_house = match load_auction_data() {
         Ok(data) => data,
         Err(_) => {
@@ -29,23 +39,20 @@ fn main() {
     clear_screen();
 
     println!("Welcome to the BidBuddie's Auction System!");
-    println!("Please register your Username:");
-    let mut username = String::new();
-    io::stdin().read_line(&mut username).expect("Failed to read line");
-   
-    println!("Enter the path to your SSH key:");
-    let mut ssh_key_path = String::new();
-    io::stdin().read_line(&mut ssh_key_path).expect("Failed to read line");
 
+    println!("Please select an option:\n1. Login\n2. Register");
+    let mut option = String::new();
+    io::stdin().read_line(&mut option).expect("Failed to read line");
 
-    let mut user = User::new(username.trim().to_string(), ssh_key_path.trim().to_string());
-
-    // After creating the user, store the SSH key
-    if let Err(e) = user.store_ssh_key() {
-        eprintln!("Failed to store SSH key: {}", e);
-    }
+    let mut user = match option.trim() {
+        "1" => login(),
+        "2" => register_user(),
+        _ => {
+            println!("Invalid option, please try again.");
+            return; 
+        },
+    };
     
-
     loop {
         clear_screen();
         println!("=== Main Menu ===");
@@ -70,6 +77,85 @@ fn main() {
             },
         }
     }
+}
+
+fn login() -> User {
+    println!("Please enter your Username:");
+    let mut username = String::new();
+    io::stdin().read_line(&mut username).expect("Failed to read line");
+    let username = username.trim();
+
+    println!("Enter the path to your SSH key:");
+    let mut ssh_key_path = String::new();
+    io::stdin().read_line(&mut ssh_key_path).expect("Failed to read line");
+    let ssh_key_path = ssh_key_path.trim();
+
+    // Load users from "users.json"
+    let users = load_users_from_file("users.json").expect("Failed to load users");
+
+    // Attempt to find the user with the given identifier and ssh_key_path
+    for user in users {
+        if user.identifier == username && user.ssh_key_path == ssh_key_path {
+            println!("Login successful for user: {}", username);
+            return user;
+        }
+    }
+    clear_screen();
+    println!("Login failed. Username or SSH key path does not match.");
+    login() // Retry login
+}
+
+fn load_users_from_file(file_path: &str) -> Result<Vec<User>, serde_json::Error> {
+    let data = match fs::read_to_string(file_path) {
+        Ok(data) => data,
+        Err(_) => {
+            println!("No existing users found or unable to read the file.");
+            return Ok(vec![]);
+        },
+    };
+    serde_json::from_str(&data)
+}
+
+
+fn register_user() -> User {
+    println!("Please enter your Username:");
+    let mut username = String::new();
+    io::stdin().read_line(&mut username).expect("Failed to read line");
+
+    println!("Enter the path to your SSH key:");
+    let mut ssh_key_path = String::new();
+    io::stdin().read_line(&mut ssh_key_path).expect("Failed to read line");
+
+    let user = User {
+        identifier: username.trim().to_string(),
+        credits: 0.0,
+        participated_auctions: HashMap::new(),
+        ssh_key_path: ssh_key_path.trim().to_string(),
+    };
+
+    // Attempt to store the SSH key, reporting any errors encountered
+    match user.store_ssh_key() {
+        Ok(_) => println!("SSH key stored successfully."),
+        Err(e) => println!("Failed to store SSH key: {}", e),
+    }
+
+    // Path to the JSON file where users are stored
+    let file_path = "users.json";
+    let mut users = Vec::new();
+
+    // Check if file exists and read the existing users
+    if Path::new(file_path).exists() {
+        let data = fs::read_to_string(file_path).expect("Failed to read users.json");
+        users = serde_json::from_str(&data).expect("Failed to deserialize users");
+    }
+
+    // Add the new user to the vector and write it back to the file
+    users.push(user.clone()); // Clone user for push to avoid move
+    let users_json = serde_json::to_string_pretty(&users).expect("Failed to serialize users");
+    fs::write(file_path, users_json).expect("Failed to write to users.json");
+
+    println!("User registered successfully.");
+    user // Return the original user, not moved thanks to clone
 }
 
 fn auctions_menu(user: &mut User, auction_house: &mut AuctionHouse) {
