@@ -18,6 +18,8 @@ fn clear_screen() {
 }
 
 fn main() {
+
+    // Change this for a scrapping function later on
     let mut auction_house = match load_auction_data() {
         Ok(data) => data,
         Err(_) => {
@@ -29,23 +31,20 @@ fn main() {
     clear_screen();
 
     println!("Welcome to the BidBuddie's Auction System!");
-    println!("Please register your Username:");
-    let mut username = String::new();
-    io::stdin().read_line(&mut username).expect("Failed to read line");
-   
-    println!("Enter the path to your SSH key:");
-    let mut ssh_key_path = String::new();
-    io::stdin().read_line(&mut ssh_key_path).expect("Failed to read line");
 
+    println!("Please select an option:\n1. Login\n2. Register");
+    let mut option = String::new();
+    io::stdin().read_line(&mut option).expect("Failed to read line");
 
-    let mut user = User::new(username.trim().to_string(), ssh_key_path.trim().to_string());
-
-    // After creating the user, store the SSH key
-    if let Err(e) = user.store_ssh_key() {
-        eprintln!("Failed to store SSH key: {}", e);
-    }
+    let mut user = match option.trim() {
+        "1" => login(),
+        "2" => register_user(),
+        _ => {
+            println!("Invalid option, please try again.");
+            return; 
+        },
+    };
     
-
     loop {
         clear_screen();
         println!("=== Main Menu ===");
@@ -71,6 +70,42 @@ fn main() {
         }
     }
 }
+
+fn login() -> User {
+    // Implementation for logging in a user
+    // For simplicity, returning a dummy user
+    println!("Logging in...");
+    User::new("user123".to_string(), "/path/to/ssh_key".to_string())
+}
+
+fn register_user() -> User {
+    // Prompt for and read the username
+    println!("Please enter your Username:");
+    let mut username = String::new();
+    io::stdin().read_line(&mut username).expect("Failed to read line");
+
+    // Prompt for and read the path to the SSH key
+    println!("Enter the path to your SSH key:");
+    let mut ssh_key_path = String::new();
+    io::stdin().read_line(&mut ssh_key_path).expect("Failed to read line");
+
+    // Create a new User instance with the provided username and SSH key path
+    let mut user = User::new(username.trim().to_string(), ssh_key_path.trim().to_string());
+
+    // Attempt to store the SSH key, reporting any errors encountered
+    match user.store_ssh_key() {
+        Ok(_) => println!("SSH key stored successfully."),
+        Err(e) => println!("Failed to store SSH key: {}", e),
+    }
+
+    // Return the newly registered user
+    println!("Registering new user...");
+    user
+}
+
+
+
+ 
 
 fn auctions_menu(user: &mut User, auction_house: &mut AuctionHouse) {
     loop {

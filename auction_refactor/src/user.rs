@@ -5,13 +5,14 @@ use std::path::Path;
 use std::fs::{self, File};
 use chrono::{DateTime, Utc};
 
+
 #[derive(Debug, Clone)]
 enum AuctionActivity {
     Created(u32), // Contains Auction ID
     Bid(u32, f32), // Contains Auction ID and bid amount
 }
 
-#[derive(Debug)]
+#[derive(Debug,Clone)]
 pub struct User {
     pub identifier: String, //saved the user identifier
     pub credits: f32, //saved the user credits
