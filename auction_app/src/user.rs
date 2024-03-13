@@ -1,30 +1,32 @@
 use crate::auction::{Auction, AuctionHouse};
-use std::collections::HashMap;
-use std::io::{Write};
-use std::path::Path;
-use std::fs::{self, File};
 use chrono::{DateTime, Utc};
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::fs::{self, File};
+use std::io::Write;
+use std::path::Path;
 
 // The AuctionActivity enum is used to store the activities of the user in the auctions.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum AuctionActivity {
-    Created(u32), // Contains Auction ID
+    Created(u32),  // Contains Auction ID
     Bid(u32, f32), // Contains Auction ID and bid amount
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct User {
-    pub identifier: String,
+    pub uid: String,
+    pub user_name: String,
     pub credits: f32,
     pub participated_auctions: HashMap<u32, Vec<AuctionActivity>>,
     pub ssh_key_path: String,
 }
 
 impl User {
-    pub fn new(identifier: String, ssh_key_path: String) -> Self {
+    pub fn new(user_name: String, ssh_key_path: String, uid: String) -> Self {
         User {
-            identifier,
+            uid,
+            user_name,
             credits: 0.0,
             participated_auctions: HashMap::new(),
             ssh_key_path,
@@ -45,7 +47,7 @@ impl User {
         let mut users: Vec<User> = serde_json::from_str(&file_content).unwrap();
 
         // Find the user in the vector and update their information
-        if let Some(user) = users.iter_mut().find(|u| u.identifier == self.identifier) {
+        if let Some(user) = users.iter_mut().find(|u| u.uid == self.uid) {
             *user = self.clone();
         }
 
@@ -78,33 +80,38 @@ impl User {
         Ok(ssh_key)
     }
 
-    pub fn place_bid_with_auction_house(&mut self, auction_house: &mut AuctionHouse, auction_id: u32, bid_amount: f32) -> Result<(), &'static str> {
+    pub fn place_bid_with_auction_house(
+        &mut self,
+        auction_house: &mut AuctionHouse,
+        auction_id: u32,
+        bid_amount: f32,
+    ) -> Result<(), &'static str> {
         if self.credits < bid_amount {
             return Err("Insufficient credits.");
         }
-        match auction_house.place_bid(auction_id, self.identifier.clone(), bid_amount) {
+        match auction_house.place_bid(auction_id, self.uid.clone(), bid_amount) {
             Ok(()) => {
                 self.credits -= bid_amount;
                 Ok(())
-            },
+            }
             Err(e) => Err(e),
         }
     }
 
-    pub fn store_ssh_key(&self) -> std::io::Result<()> {
-        // Ensure the "public_ssh_key" directory exists
-        let dir_path = "public_ssh_key";
-        fs::create_dir_all(dir_path)?;
-    
-        // Reading the SSH public key from the provided path
-        let ssh_key = fs::read_to_string(&self.ssh_key_path)?;
-    
-        // Creating a file name based on the user identifier
-        let file_name = format!("{}/{}-ssh_key.pub", dir_path, self.identifier);
-    
-        // Creating and writing the SSH public key to the file
-        let mut file = File::create(Path::new(&file_name))?;
-        file.write_all(ssh_key.as_bytes())?;
-        Ok(())
-    }
+    // pub fn store_ssh_key(&self) -> std::io::Result<()> {
+    //     // Ensure the "public_ssh_key" directory exists
+    //     let dir_path = "public_ssh_key";
+    //     fs::create_dir_all(dir_path)?;
+    //
+    //     // Reading the SSH public key from the provided path
+    //     let ssh_key = fs::read_to_string(&self.ssh_key_path)?;
+    //
+    //     // Creating a file name based on the user uid
+    //     let file_name = format!("{}/{}-ssh_key.pub", dir_path, self.user_name);
+    //
+    //     // Creating and writing the SSH public key to the file
+    //     let mut file = File::create(Path::new(&file_name))?;
+    //     file.write_all(ssh_key.as_bytes())?;
+    //     Ok(())
+    // }
 }

@@ -16,5 +16,6 @@
     "credits": 20.0,
     "participated_auctions": {},
     "ssh_key_path": "src/sshkey.txt"
-  }
+  },
+
 ]

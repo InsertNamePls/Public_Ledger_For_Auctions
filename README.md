@@ -113,8 +113,37 @@ $ auction --list-items
    - If no offer exceeds the current bid price (ask price), the offer is either dropped or stored for later consideration.
    - If a matching offer is found, it's forwarded to the peer with the highest buy price (or lowest sell price). The final price is determined as the mean between these matching offers.
 
+<<<<<<< Updated upstream
 #### Operations Include:
 - Creation of an auction.
 - Opening an auction.
 - Bidding on items.
 - Purchasing items.
+=======
+1-> customer send a service request to the responsible broker, which is realized by a set of peers as described later on.
+The broker replies with the current bid price (ask price).
+
+2-> Based on this information, the customer
+sends a price offer to the broker
+
+2.1-> if there is no offer higher than the
+current bid price (ask price). The price offer is dropped or
+stored in a table for later use.
+
+2.2-> If there is a match, the price offer is forwarded to the peer
+that offered the highest buy price (lowest sell price). The
+resulting price for the service is set to the mean price between
+the matching price offers.
+
+
+criação de um leilão
+abertura de leilão
+bid
+compra do item
+
+
+
+sudo apt-get update
+sudo apt install build-essential
+brew install protobuf
+>>>>>>> Stashed changes
