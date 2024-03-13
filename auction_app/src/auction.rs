@@ -24,7 +24,14 @@ pub struct Auction {
 }
 
 impl Auction {
-    pub fn new(id: u32, item_name: String, start_time: DateTime<Utc>, end_time: DateTime<Utc>, starting_bid: f32, user_id: String) -> Self {
+    pub fn new(
+        id: u32,
+        item_name: String,
+        start_time: DateTime<Utc>,
+        end_time: DateTime<Utc>,
+        starting_bid: f32,
+        user_id: String,
+    ) -> Self {
         Auction {
             id,
             item_name,
@@ -33,7 +40,7 @@ impl Auction {
             starting_bid,
             bids: Vec::new(),
             active: true,
-            user_id, 
+            user_id,
         }
     }
 
@@ -65,7 +72,9 @@ pub struct AuctionHouse {
 
 impl AuctionHouse {
     pub fn new() -> Self {
-        AuctionHouse { auctions: HashMap::new() }
+        AuctionHouse {
+            auctions: HashMap::new(),
+        }
     }
 
     pub fn add_auction(&mut self, auction: Auction) {
@@ -92,7 +101,12 @@ impl AuctionHouse {
         self.auctions.len() as u32 + 1
     }
 
-    pub fn place_bid(&mut self, auction_id: u32, bidder: String, amount: f32) -> Result<(), &'static str> {
+    pub fn place_bid(
+        &mut self,
+        auction_id: u32,
+        bidder: String,
+        amount: f32,
+    ) -> Result<(), &'static str> {
         if let Some(auction) = self.auctions.get_mut(&auction_id) {
             return auction.place_bid(bidder, amount);
         }
