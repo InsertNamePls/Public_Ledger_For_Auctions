@@ -2,7 +2,6 @@ use chrono::{DateTime, Duration, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Bid {
     pub bidder: String,
@@ -113,7 +112,9 @@ impl AuctionHouse {
         Err("Auction not found.")
     }
 }
-
+pub struct AuctionTransaction {
+    auction_id: u32,
+}
 pub fn save_auction_data(auctions: &AuctionHouse) -> Result<(), Box<dyn std::error::Error>> {
     let serialized = serde_json::to_string_pretty(&auctions)?;
     fs::write("auction_data.json", serialized)?;

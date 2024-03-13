@@ -10,6 +10,16 @@
       "active": true,
       "user_id": "example_user"
     },
+    "3": {
+      "id": 3,
+      "item_name": "1asdasddesk",
+      "start_time": 1710330662,
+      "end_time": 1712922662,
+      "starting_bid": 10.0,
+      "bids": [],
+      "active": true,
+      "user_id": "1db144922cbe79ddd6ae55e8ad83a6431c2bdd3735babd8b85142b476aa00ccc"
+    },
     "2": {
       "id": 2,
       "item_name": "Teste",
@@ -19,6 +29,58 @@
       "bids": [],
       "active": true,
       "user_id": "Ze"
+    },
+    "4": {
+      "id": 4,
+      "item_name": "chair",
+      "start_time": 1710345441,
+      "end_time": 1712937441,
+      "starting_bid": 1.0,
+      "bids": [],
+      "active": true,
+      "user_id": "1db144922cbe79ddd6ae55e8ad83a6431c2bdd3735babd8b85142b476aa00ccc"
+    },
+    "5": {
+      "id": 5,
+      "item_name": "Diamond",
+      "start_time": 1710346001,
+      "end_time": 1712938001,
+      "starting_bid": 1000.0,
+      "bids": [
+        {
+          "bidder": "1db144922cbe79ddd6ae55e8ad83a6431c2bdd3735babd8b85142b476aa00ccc",
+          "amount": 2000.0
+        }
+      ],
+      "active": true,
+      "user_id": "1db144922cbe79ddd6ae55e8ad83a6431c2bdd3735babd8b85142b476aa00ccc"
+    },
+    "6": {
+      "id": 6,
+      "item_name": "pen",
+      "start_time": 1710347203,
+      "end_time": 1712939203,
+      "starting_bid": 1.0,
+      "bids": [
+        {
+          "bidder": "1db144922cbe79ddd6ae55e8ad83a6431c2bdd3735babd8b85142b476aa00ccc",
+          "amount": 2.0
+        },
+        {
+          "bidder": "1db144922cbe79ddd6ae55e8ad83a6431c2bdd3735babd8b85142b476aa00ccc",
+          "amount": 2.1
+        },
+        {
+          "bidder": "1db144922cbe79ddd6ae55e8ad83a6431c2bdd3735babd8b85142b476aa00ccc",
+          "amount": 2.5
+        },
+        {
+          "bidder": "1db144922cbe79ddd6ae55e8ad83a6431c2bdd3735babd8b85142b476aa00ccc",
+          "amount": 10.0
+        }
+      ],
+      "active": true,
+      "user_id": "1db144922cbe79ddd6ae55e8ad83a6431c2bdd3735babd8b85142b476aa00ccc"
     }
   }
 }

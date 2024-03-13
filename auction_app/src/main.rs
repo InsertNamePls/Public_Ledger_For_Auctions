@@ -56,7 +56,7 @@ async fn main() {
 
     let mut user = match option.trim() {
         "1" => login(),
-        "2" => register_user(),
+        "2" => register_user().await,
         _ => {
             println!("Invalid option, please try again.");
             return;
@@ -78,7 +78,7 @@ async fn main() {
             .expect("Failed to read line");
 
         match option.trim() {
-            "1" => auctions_menu(&mut user, &mut auction_house),
+            "1" => auctions_menu(&mut user, &mut auction_house).await,
             "2" => profile_menu(&mut user).await,
             "3" => {
                 println!("Exiting...");
@@ -137,7 +137,7 @@ fn load_users_from_file(file_path: &str) -> Result<Vec<User>, serde_json::Error>
     serde_json::from_str(&data)
 }
 
-fn register_user() -> User {
+async fn register_user() -> User {
     println!("Please enter your Username:");
     let mut username = String::new();
     io::stdin()
@@ -181,12 +181,16 @@ fn register_user() -> User {
     users.push(user.clone()); // Clone user for push to avoid move
     let users_json = serde_json::to_string_pretty(&users).expect("Failed to serialize users");
     fs::write(file_path, users_json).expect("Failed to write to users.json");
-
+    send_transaction(
+        format!("user: {}, credits {}", user.uid, user.credits),
+        "0.0.0.0",
+    )
+    .await;
     println!("User registered successfully.");
     user // Return the original user, not moved thanks to clone
 }
 
-fn auctions_menu(user: &mut User, auction_house: &mut AuctionHouse) {
+async fn auctions_menu(user: &mut User, auction_house: &mut AuctionHouse) {
     loop {
         clear_screen();
         println!("=== Auctions Menu ===");
@@ -204,8 +208,8 @@ fn auctions_menu(user: &mut User, auction_house: &mut AuctionHouse) {
             .expect("Failed to read line");
 
         match option.trim() {
-            "1" => join_auction(user, auction_house),
-            "2" => create_auction(&user, auction_house),
+            "1" => join_auction(user, auction_house).await,
+            "2" => create_auction(&user, auction_house).await,
             "3" => current_auctions(user, auction_house),
             "4" => history(user),
             "5" => break,
@@ -289,7 +293,7 @@ async fn add_credits(user: &mut User) {
 
     //send event to blockchain
     send_transaction(
-        format!("user {} aded {}", user.uid, amount.to_string()),
+        format!("user: {}, credits {}", user.uid, user.credits),
         "0.0.0.0",
     )
     .await;
@@ -302,7 +306,7 @@ async fn add_credits(user: &mut User) {
     // Implementation for adding credits to the user's account
 }
 
-fn join_auction(user: &mut User, auction_house: &mut AuctionHouse) {
+async fn join_auction(user: &mut User, auction_house: &mut AuctionHouse) {
     clear_screen();
 
     println!("Active Auctions:");
@@ -350,6 +354,17 @@ fn join_auction(user: &mut User, auction_house: &mut AuctionHouse) {
             println!("Bid placed successfully for Auction ID {}", auction_id);
             user.credits -= amount; // Update user credits
             save_auction_data(auction_house).expect("Failed to save auction data");
+
+            send_transaction(
+                format!(
+                    "auction_id: {}, bid_value: {}, user_id:{}",
+                    auction_id,
+                    amount.to_string(),
+                    user.uid
+                ),
+                "0.0.0.0",
+            )
+            .await;
         } else {
             println!("Failed to place bid. Auction might not exist or be closed.");
         }
@@ -359,7 +374,7 @@ fn join_auction(user: &mut User, auction_house: &mut AuctionHouse) {
     pause();
 }
 
-fn create_auction(user: &User, auction_house: &mut AuctionHouse) {
+async fn create_auction(user: &User, auction_house: &mut AuctionHouse) {
     clear_screen();
     println!("Creating a new auction.");
     println!("Enter the item name:");
@@ -403,6 +418,14 @@ fn create_auction(user: &User, auction_house: &mut AuctionHouse) {
 
     auction_house.add_auction(auction);
     save_auction_data(auction_house).expect("Failed to save auction data");
+    send_transaction(
+        format!(
+            "auction_id: {}, item_name: {}, starting_bid:{}",
+            auction_id, item_name, starting_bid
+        ),
+        "0.0.0.0",
+    )
+    .await;
     println!("Auction created successfully!");
     pause();
 }
