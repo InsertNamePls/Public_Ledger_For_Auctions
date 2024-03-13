@@ -147,3 +147,30 @@ sudo apt-get update
 sudo apt install build-essential
 brew install protobuf
 >>>>>>> Stashed changes
+
+
+### Test Locally with docker
+1*  docker image build 
+```bash docker build . --tag dledger2auction```
+
+2*  crate docker Instance
+```bash docker run --name=test1 -dit dledger2auction && docker exec -it test1 bash ```
+
+3* create instance test 1
+```bashcd home/
+cargo build
+cargo run --bin blockchain_operator -- init_blockchain 172.17.0.3
+```
+4* create instance test 2
+```bash cd home/
+cargo build
+cargo run --bin blockchain_operator -- join_blockchain 172.17.0.2
+```
+
+#### stop docker instances
+```bash
+docker stop test1 test2 && docker rm test1 test2
+
+remove recent image
+docker image rm `docker images | grep dledger2auction | awk '{print $3}'`
+```
