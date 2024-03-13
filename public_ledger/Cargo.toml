@@ -1,5 +1,5 @@
 [package]
-name = "public_ledger
+name = "public_ledger"
 version = "0.1.0"
 edition = "2021"
 
@@ -29,7 +29,7 @@ tonic-build = "0.5"
 
 [[bin]]
 name="blockchain_operator"
-path="src/main1.rs"
-# [[bin]]
-# name="network_validator_server"
-# path="src/network_validator_server.rs"
+path="src/main.rs"
+[[bin]]
+name="tx"
+path="src/transactions.rs"

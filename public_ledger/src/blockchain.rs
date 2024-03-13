@@ -9,7 +9,7 @@ use tokio::sync::{Mutex, MutexGuard};
 use crate::helper::handle_connection;
 const DIFICULTY: usize = 4;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Block {
     pub index: u32,
     pub prev_hash: String,
@@ -19,12 +19,12 @@ pub struct Block {
     pub tx: Vec<String>,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 //pub struct Blockchain {
 //    pub blocks: Vec<Block>,
 //}
 pub struct Blockchain {
-    pub blocks: Vec<String>,
+    pub blocks: Vec<Block>,
 }
 impl Block {
     pub fn new(&self) {}
@@ -49,8 +49,8 @@ impl Block {
 
 impl Blockchain {
     pub fn new(&self) {}
-    pub fn add_block(&mut self, block: &String) {
-        self.blocks.push(block.to_string());
+    pub fn add_block(&mut self, block: Block) {
+        self.blocks.push(block);
     }
 }
 pub fn gen_hash(
