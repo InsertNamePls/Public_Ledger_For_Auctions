@@ -109,7 +109,7 @@ fn login() -> User {
     // Load users from "users.json"
     let users = load_users_from_file("users.json").expect("Failed to load users");
 
-    let uid = gen_uid(&ssh_key_path.trim().to_string());
+    let uid = gen_uid(ssh_key_path, username.to_string());
 
     println!("{}", uid);
 
@@ -150,7 +150,7 @@ async fn register_user() -> User {
         .read_line(&mut ssh_key_path)
         .expect("Failed to read line");
 
-    let uid = gen_uid(&ssh_key_path.trim().to_string());
+    let uid = gen_uid(ssh_key_path.trim(), username.trim().to_string());
 
     println!("{}", uid);
     let user = User {
@@ -451,13 +451,13 @@ fn pause() {
     io::stdin().read_line(&mut pause).unwrap();
 }
 
-fn gen_uid(ssh_key_path: &String) -> String {
+fn gen_uid(ssh_key_path: &str, user_name: String) -> String {
     let mut hasher = Sha256::new();
     println!("{}", ssh_key_path);
-    let pub_key = fs::read_to_string(&ssh_key_path).expect("Unable to read file");
+    let pub_key = fs::read_to_string(ssh_key_path).expect("Unable to read file");
 
     println!();
-    hasher.update(pub_key);
+    hasher.update(user_name + &pub_key);
     let result = hasher
         .finalize()
         .iter()
