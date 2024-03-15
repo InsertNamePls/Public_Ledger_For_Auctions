@@ -146,31 +146,40 @@ sudo apt install build-essential
 brew install protobuf
 
 
-### Test Locally with docker
-1. docker image build 
-```bash docker build . --tag dledger2auction```
+## Test Locally with docker
+1. Build the docker Image:
+```bash 
+docker build . --tag dledger2auction
+```
 
-2. crate docker Instance
-```bash docker run --name=test1 -dit dledger2auction && docker exec -it test1 bash ```
+2. Create Docker instance
+```bash 
+docker run --name=test1 -dit dledger2auction && docker exec -it test1 bash
+```
 
-3. create instance test 1
+3. Create the instance for the auction user
 ```bash
 cd home/auction_app
 cargo build
 cargo run
+```
 
+> The user must be registered: Select Register, enter a username, the public keys are located under /home/ssh_keys/idrsa.pub
+
+4. In another bash window create instance for the miner (test 1) 
+```bash
 cd home/public_ledger
 cargo build
 cargo run --bin blockchain_operator -- init_blockchain 172.17.0.3
 ```
-4. create instance test 2
+5. In another bash window create instance for the miner (test 1) 
 ```bash
 cd home/public_ledger
 cargo build
-cargo run --bin blockchain_operator -- join_blockchain 172.17.0.2
+cargo run --bin blockchain_operator -- init_blockchain 172.17.0.3
 ```
-5. the keypair is located in /home/public_key
-#### stop docker instances
+
+#### Stop the Docker image
 ```bash
 docker stop test1 test2 && docker rm test1 test2
 
