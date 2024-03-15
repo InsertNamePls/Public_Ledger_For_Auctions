@@ -172,11 +172,11 @@ cd home/public_ledger
 cargo build
 cargo run --bin blockchain_operator -- init_blockchain 172.17.0.3
 ```
-5. In another bash window create instance for the miner (test 1) 
+5. In another bash window create instance for the miner (test 2) 
 ```bash
 cd home/public_ledger
 cargo build
-cargo run --bin blockchain_operator -- init_blockchain 172.17.0.3
+cargo run --bin blockchain_operator -- join_blockchain 172.17.0.2
 ```
 
 #### Stop the Docker image
