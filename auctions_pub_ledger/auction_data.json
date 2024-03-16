@@ -1,0 +1,99 @@
+{
+  "auctions": {
+    "4": {
+      "item_name": "dasdasd",
+      "start_time": 1710616084,
+      "end_time": 1710616144,
+      "starting_bid": 1.0,
+      "bids": [
+        {
+          "auction_id": 4,
+          "bidder": "06097b044a6673db780b5f0cc0b1d22bcaff64eb297b01bd755c40f533426ed1",
+          "amount": 2.0,
+          "signature": "asdansdkasdnaskdnas"
+        }
+      ],
+      "active": false,
+      "user_id": "06097b044a6673db780b5f0cc0b1d22bcaff64eb297b01bd755c40f533426ed1",
+      "signature": "asdasdasdasd"
+    },
+    "1": {
+      "item_name": "asdasdasd",
+      "start_time": 1710615743,
+      "end_time": 1710615803,
+      "starting_bid": 1.0,
+      "bids": [
+        {
+          "auction_id": 1,
+          "bidder": "06097b044a6673db780b5f0cc0b1d22bcaff64eb297b01bd755c40f533426ed1",
+          "amount": 2.0,
+          "signature": "asdansdkasdnaskdnas"
+        }
+      ],
+      "active": false,
+      "user_id": "06097b044a6673db780b5f0cc0b1d22bcaff64eb297b01bd755c40f533426ed1",
+      "signature": "asdasdasdasd"
+    },
+    "5": {
+      "item_name": "asdasdasdasd",
+      "start_time": 1710616333,
+      "end_time": 1710616393,
+      "starting_bid": 1.0,
+      "bids": [
+        {
+          "auction_id": 5,
+          "bidder": "06097b044a6673db780b5f0cc0b1d22bcaff64eb297b01bd755c40f533426ed1",
+          "amount": 10.0,
+          "signature": "asdansdkasdnaskdnas"
+        }
+      ],
+      "active": false,
+      "user_id": "06097b044a6673db780b5f0cc0b1d22bcaff64eb297b01bd755c40f533426ed1",
+      "signature": "asdasdasdasd"
+    },
+    "3": {
+      "item_name": "asdasdasdas",
+      "start_time": 1710616050,
+      "end_time": 1710616230,
+      "starting_bid": 1.0,
+      "bids": [
+        {
+          "auction_id": 3,
+          "bidder": "06097b044a6673db780b5f0cc0b1d22bcaff64eb297b01bd755c40f533426ed1",
+          "amount": 3.0,
+          "signature": "asdansdkasdnaskdnas"
+        }
+      ],
+      "active": false,
+      "user_id": "06097b044a6673db780b5f0cc0b1d22bcaff64eb297b01bd755c40f533426ed1",
+      "signature": "asdasdasdasd"
+    },
+    "6": {
+      "item_name": "asdasdasdasd",
+      "start_time": 1710616898,
+      "end_time": 1710617198,
+      "starting_bid": 1.0,
+      "bids": [],
+      "active": true,
+      "user_id": "06097b044a6673db780b5f0cc0b1d22bcaff64eb297b01bd755c40f533426ed1",
+      "signature": "asdasdasdasd"
+    },
+    "2": {
+      "item_name": "sadasdasdasd",
+      "start_time": 1710616038,
+      "end_time": 1710616278,
+      "starting_bid": 1.0,
+      "bids": [
+        {
+          "auction_id": 2,
+          "bidder": "06097b044a6673db780b5f0cc0b1d22bcaff64eb297b01bd755c40f533426ed1",
+          "amount": 1.0,
+          "signature": "asdansdkasdnaskdnas"
+        }
+      ],
+      "active": false,
+      "user_id": "06097b044a6673db780b5f0cc0b1d22bcaff64eb297b01bd755c40f533426ed1",
+      "signature": "asdasdasdasd"
+    }
+  }
+}
