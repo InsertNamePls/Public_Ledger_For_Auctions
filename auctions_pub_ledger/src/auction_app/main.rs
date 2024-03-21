@@ -18,8 +18,7 @@ use crate::auction::{
 };
 use crate::auction::{Auction, Bid};
 mod auction_client;
-use crate::auction_client::send_transaction;
-mod transactions;
+use crate::auction_client::{request_auction_house, send_transaction};
 use sha256::digest;
 
 #[cfg(not(target_os = "windows"))]
@@ -30,13 +29,13 @@ fn clear_screen() {
 #[tokio::main]
 async fn main() {
     // Change this for a scrapping function later on
-    let mut auction_house = match load_auction_data().await {
-        Ok(data) => data,
-        Err(_) => {
-            println!("error geting acoution house");
-            exit(0);
-        }
-    };
+    // let mut auction_house = match load_auction_data().await {
+    //     Ok(data) => data,
+    //     Err(_) => {
+    //         println!("error geting acoution house");
+    //         exit(0);
+    //     }
+    // };
     clear_screen();
 
     println!("Welcome to the BidBuddie's Auction System!");
@@ -71,7 +70,7 @@ async fn main() {
             .expect("Failed to read line");
 
         match option.trim() {
-            "1" => auctions_menu(&mut user, &mut auction_house).await,
+            "1" => auctions_menu(&mut user).await,
             "2" => profile_menu(&mut user).await,
             "3" => {
                 println!("Exiting...");
@@ -167,7 +166,7 @@ async fn register_user() -> User {
     user // Return the original user, not moved thanks to clone
 }
 
-async fn auctions_menu(user: &mut User, auction_house: &mut AuctionHouse) {
+async fn auctions_menu(user: &mut User) {
     loop {
         clear_screen();
         println!("=== Auctions Menu ===");
@@ -187,7 +186,7 @@ async fn auctions_menu(user: &mut User, auction_house: &mut AuctionHouse) {
         match option.trim() {
             "1" => join_auction(user).await,
             "2" => create_auction(&user).await,
-            "3" => current_auctions(),
+            "3" => current_auctions().await,
             "4" => history(user),
             "5" => break,
             _ => {
@@ -278,7 +277,7 @@ async fn add_credits(user: &mut User) {
 
 async fn join_auction(user: &mut User) {
     clear_screen();
-    list_auctions();
+    list_auctions().await;
     let mut auction_id = 0;
     loop {
         println!("Enter the Auction ID you want to join (or 'exit' to cancel):");
@@ -323,7 +322,7 @@ async fn join_auction(user: &mut User) {
             amount,
             signature: "asdansdkasdnaskdnas".to_string(),
         };
-        send_transaction(Transaction::Bid(bid), "192.168.1.66").await;
+        send_transaction(Transaction::Bid(bid), "0.0.0.0").await;
     } else {
         println!("Insufficient credits to place bid.");
     }
@@ -362,6 +361,7 @@ async fn create_auction(user: &User) {
     let end_time = start_time + Duration::minutes(duration);
     // Use user.uid to pass the creator's uid to the new auction
     let auction = Auction::new(
+        0,
         item_name.trim().to_string(),
         start_time,
         end_time,
@@ -370,16 +370,19 @@ async fn create_auction(user: &User) {
         "asdasdasdasd".to_string(),
     );
 
-    send_transaction(Transaction::Auction(auction.clone()), "192.168.1.66").await;
+    send_transaction(Transaction::Auction(auction.clone()), "0.0.0.0").await;
     println!("Auction created successfully!");
     pause();
 }
 
-fn current_auctions() {
+async fn current_auctions() {
     clear_screen();
+
     println!("Active Auctions:");
 
-    list_auctions();
+    request_auction_house("0.0.0.0").await;
+
+    list_auctions().await;
     pause();
 }
 
