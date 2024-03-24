@@ -3,21 +3,15 @@ mod user;
 
 use chrono::Duration;
 use std::collections::HashMap;
-use std::process::exit;
 use user::User;
 
-use chrono::Utc;
-use serde::{Deserialize, Serialize};
-use std::{fs, usize};
-//use std::fs::{self, File};
-use crate::auction::{
-    list_auctions, load_auction_data, save_auction_data, AuctionHouse, Transaction,
-};
+use crate::auction::{list_auctions, Transaction};
 use crate::auction::{Auction, Bid};
 use auction_client::send_transaction;
+use chrono::Utc;
 use std::env;
-use std::io::{self, Read, Write};
-use std::path::Path;
+use std::fs;
+use std::io::{self, Write};
 mod auction_client;
 use crate::auction_client::request_auction_house;
 use sha256::digest;

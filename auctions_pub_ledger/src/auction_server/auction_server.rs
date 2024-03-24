@@ -1,11 +1,7 @@
 use super::auction::*;
 use crate::auction_client::send_transaction;
-use crate::blockchain_operator::block_generator;
-use crate::blockchain_pow::{block_peer_validator_client, blockchain_operator_validator};
-use async_std::task::sleep;
 use chrono::Utc;
 use std::fs;
-use std::time::Duration;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 

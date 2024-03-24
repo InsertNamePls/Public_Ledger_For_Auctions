@@ -21,13 +21,23 @@ mod blockchain_pow;
 use crate::auction_server::{auction_server, retrieve_auction_house};
 use crate::blockchain_pow::block_peer_validator_server;
 use std::env;
+use std::sync::Arc;
+use std::vec::Vec;
+use tokio::sync::Mutex;
 
 async fn destributed_auction_operator(blockchain_vector: Vec<Blockchain>, dest_ip: String) {
+    let shared_blockchain_vector = Arc::new(Mutex::new(blockchain_vector));
+
     let task1 = task::spawn(auction_server(dest_ip.clone()));
-    let task2 = task::spawn(auctions_validator(dest_ip.clone(), blockchain_vector));
-    let task3 = task::spawn(retrieve_blockchain());
+    let task2 = task::spawn(auctions_validator(
+        dest_ip.clone(),
+        shared_blockchain_vector.clone(),
+    ));
+    let task3 = task::spawn(retrieve_blockchain(shared_blockchain_vector.clone()));
     let task4 = task::spawn(retrieve_auction_house());
-    let task5 = task::spawn(block_peer_validator_server());
+    let task5 = task::spawn(block_peer_validator_server(
+        shared_blockchain_vector.clone(),
+    ));
     task1.await.unwrap();
     task2.await.unwrap();
     task3.await.unwrap();

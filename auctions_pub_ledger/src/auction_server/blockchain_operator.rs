@@ -1,17 +1,14 @@
-use crate::auction::get_files_in_directory;
-use crate::blockchain::{self, validate_block, Block, Blockchain};
-use crate::blockchain_pow::*;
+use crate::blockchain::{validate_block, Block, Blockchain};
 use chrono::Utc;
-use local_ip_address::local_ip;
-use std::ops::Index;
-use std::process::exit;
-use std::{fs, result, usize};
+use std::sync::Arc;
+use std::vec::Vec;
+use std::{fs, usize};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
-
+use tokio::sync::Mutex;
 const DIFICULTY: usize = 4;
 
-pub async fn block_generator(blockchain: &Blockchain, tx: Vec<String>) -> Block {
+pub async fn block_generator(blockchain: Blockchain, tx: Vec<String>) -> Block {
     let previous_block = blockchain.blocks.last().unwrap();
     println!("previous{:?}", previous_block);
     let mut block: Block = Block::new(
@@ -25,7 +22,7 @@ pub async fn block_generator(blockchain: &Blockchain, tx: Vec<String>) -> Block 
 
     block.mine_block(4);
 
-    println!("generated_block {:?}", block);
+    println!("generated_block -> {:?}\n", block);
     block
 
     // if validate_block(&block, previous_block, DIFICULTY)
@@ -37,23 +34,24 @@ pub async fn validator(mut blockchain: Blockchain, block: Block) -> bool {
     if validate_block(&block, blockchain.blocks.last().unwrap(), DIFICULTY) {
         true
     } else {
-        println!("validator function block {} is invalid ", block.index);
+        println!("block {} is invalid ", block.index);
         false
     }
 }
 
-pub async fn retrieve_blockchain() {
+pub async fn retrieve_blockchain(share_blockchain_vector: Arc<Mutex<Vec<Blockchain>>>) {
     let listener = TcpListener::bind("0.0.0.0:3002").await.unwrap();
 
     while let Ok((mut socket, _)) = listener.accept().await {
-        let blochchain_vector: Vec<Blockchain> = blockchain_vector_build().await;
+        //let blochchain_vector: Vec<Blockchain> = blockchain_vector_build().await;
 
         let mut buffer = [0; 2048];
         match socket.read(&mut buffer).await {
             Ok(0) => break,
             Ok(_n) => {
-                for blockchain in blochchain_vector {
-                    println!("Blochchain sent: {:?}", blockchain);
+                let mut blockchain_vector = share_blockchain_vector.lock().await;
+                for blockchain in blockchain_vector.clone() {
+                    println!("\nBlochchain sent: {:?}", blockchain);
                     let blockchain_str: String =
                         serde_json::to_string(&blockchain).expect("Failed to deserialize JSON");
 
@@ -88,7 +86,11 @@ pub async fn get_remote_blockchain(dest_addr: &String) -> Vec<Blockchain> {
                     let result = String::from_utf8_lossy(&buffer[..n]);
                     let blockchain: Blockchain =
                         serde_json::from_str(&result).expect("Failed to deserialize JSON");
-                    println!("got blockchain from network -> {:?}\n", blockchain);
+                    println!(
+                        "got blockchain from peer {} -> {:?}\n",
+                        stream.peer_addr().unwrap(),
+                        blockchain
+                    );
                     save_blockchain_locally(
                         &blockchain,
                         format!("blockchain_active/blockchain_{}.json", file_counter).as_str(),

@@ -154,34 +154,45 @@ docker build . --tag dledger2auction
 
 2. Create Docker instance
 ```bash 
-docker run --name=test1 -dit dledger2auction && docker exec -it test1 bash
+docker run --name=server1 -dit dledger2auction && docker exec -it server1 bash
+docker run --name=server2 -dit dledger2auction && docker exec -it server2 bash
+docker run --name=auction1 -dit dledger2auction && docker exec -it auction1 bash
+docker run --name=auction2 -dit dledger2auction && docker exec -it auction2 bash
 ```
-
-3. Create the instance for the auction user
+3. build project in each node
 ```bash
-cd home/auction_app
+cd home/auctions_pub_ledger/ && \
 cargo build
-cargo run
 ```
-
+4. In another bash window create instance for the miner (server1) 
+```bash
+cargo run --bin main -- init_blockchain 172.17.0.3
+```
+5. In another bash window create instance for the miner (server2) 
+```bash
+cargo run --bin main -- join_blockchain 172.17.0.2
+```
+6. Run auction nodes
+```bash
+cargo run --bin auction -- 172.17.0.3,172.17.0.2
+cargo run --bin auction -- 172.17.0.2,172.17.0.3
+```
 > The user must be registered: Select Register, enter a username, the public keys are located under /home/ssh_keys/idrsa.pub
-
-4. In another bash window create instance for the miner (test 1) 
+###### example:
 ```bash
-cd home/public_ledger
-cargo build
-cargo run --bin blockchain_operator -- init_blockchain 172.17.0.3
+Welcome to the BidBuddie's Auction System!
+Please select an option:
+1. Login
+2. Register
+2
+Please enter your Username:
+user1
+Enter the path to your SSH key:
+/home/ssh_keys/idrsa.pub
 ```
-5. In another bash window create instance for the miner (test 2) 
+#### Environment Cleanup 
 ```bash
-cd home/public_ledger
-cargo build
-cargo run --bin blockchain_operator -- join_blockchain 172.17.0.2
-```
-
-#### Stop the Docker image
-```bash
-docker stop test1 test2 && docker rm test1 test2
+docker stop server1 server2 auction1 auction2 && docker rm server1 server2 auction1 auction2
 
 remove recent image
 docker image rm `docker images | grep dledger2auction | awk '{print $3}'`
