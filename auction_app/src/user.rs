@@ -85,11 +85,12 @@ impl User {
         auction_house: &mut AuctionHouse,
         auction_id: u32,
         bid_amount: f32,
+        signature: String,
     ) -> Result<(), &'static str> {
         if self.credits < bid_amount {
             return Err("Insufficient credits.");
         }
-        match auction_house.place_bid(auction_id, self.uid.clone(), bid_amount) {
+        match auction_house.place_bid(auction_id, self.uid.clone(), bid_amount, signature) {
             Ok(()) => {
                 self.credits -= bid_amount;
                 Ok(())

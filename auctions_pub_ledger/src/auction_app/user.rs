@@ -1,10 +1,6 @@
-use crate::auction::{Auction, AuctionHouse};
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::fs::{self, File};
-use std::io::Write;
-use std::path::Path;
+use std::fs::{self};
 
 // The AuctionActivity enum is used to store the activities of the user in the auctions.
 #[derive(Debug, Clone, Serialize, Deserialize)]

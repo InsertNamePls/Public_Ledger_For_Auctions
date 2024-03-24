@@ -1,6 +1,8 @@
+use chrono::Utc;
 use serde::{Deserialize, Serialize};
-
 use sha256::digest;
+
+const DIFICULTY: usize = 4;
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Block {
     pub index: u32,
@@ -87,6 +89,9 @@ pub fn validate_block(new_block: &Block, previous_block: &Block, dificulty: usiz
             dificulty
         );
         false
+    } else if previous_block.index + 1 != new_block.index {
+        println!("Index of new block does not follow the previous_block");
+        false
     } else if gen_hash(
         new_block.index,
         new_block.prev_hash.clone(),
@@ -105,4 +110,20 @@ pub fn validate_block(new_block: &Block, previous_block: &Block, dificulty: usiz
         println!("Block {} valid ", new_block.index);
         true
     }
+}
+
+pub async fn init_blockchain() -> Blockchain {
+    let mut genesis_blk: Block = Block::new(
+        0,
+        "".to_string(),
+        0,
+        Utc::now().timestamp_millis(),
+        "".to_string(),
+        Vec::new(),
+    );
+
+    genesis_blk.mine_block(DIFICULTY);
+    let mut blockchain: Blockchain = Blockchain::new();
+    blockchain.add_block(genesis_blk);
+    blockchain
 }

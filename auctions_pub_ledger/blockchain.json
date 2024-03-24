@@ -3,50 +3,10 @@
     {
       "index": 0,
       "prev_hash": "",
-      "nounce": 24151,
-      "timestamp": 1710616030337,
-      "hash": "00006dae7600c4689621588a98dbb1506243523fc7032f2c54a7e9aae2f36e61",
+      "nounce": 37845,
+      "timestamp": 1710984345933,
+      "hash": "000006c1e30e76c326fbd576be446c9e1bf9cb682450edd44702200a80be59e1",
       "tx": []
-    },
-    {
-      "index": 1,
-      "prev_hash": "00006dae7600c4689621588a98dbb1506243523fc7032f2c54a7e9aae2f36e61",
-      "nounce": 10397,
-      "timestamp": 1710616150745,
-      "hash": "00004ae127fbad3559898e29c3ee958543fa90dc1cda1f0a8257c0036e30630f",
-      "tx": [
-        "asdasdasdasd"
-      ]
-    },
-    {
-      "index": 2,
-      "prev_hash": "00004ae127fbad3559898e29c3ee958543fa90dc1cda1f0a8257c0036e30630f",
-      "nounce": 3301,
-      "timestamp": 1710616230984,
-      "hash": "0000a5b6336382410d2dd866313fabc69d99ca9f37b608d17ccb341a2149d135",
-      "tx": [
-        "asdasdasdasd"
-      ]
-    },
-    {
-      "index": 3,
-      "prev_hash": "0000a5b6336382410d2dd866313fabc69d99ca9f37b608d17ccb341a2149d135",
-      "nounce": 8316,
-      "timestamp": 1710616281077,
-      "hash": "0000b6ca34696c92b0b35d8915d61f8dc073eb6a141bbab9e354c3b60d99a13b",
-      "tx": [
-        "asdasdasdasd"
-      ]
-    },
-    {
-      "index": 4,
-      "prev_hash": "0000b6ca34696c92b0b35d8915d61f8dc073eb6a141bbab9e354c3b60d99a13b",
-      "nounce": 58115,
-      "timestamp": 1710616401288,
-      "hash": "0000c69fa42e2e8c25cc2a77b8a4ca9072cf391a57d01e0d864997016c940520",
-      "tx": [
-        "asdasdasdasd"
-      ]
     }
   ]
 }

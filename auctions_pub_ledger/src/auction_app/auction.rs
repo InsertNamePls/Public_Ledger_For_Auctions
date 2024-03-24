@@ -1,8 +1,7 @@
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::fs;
 
+use std::{fs, io};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Bid {
     pub auction_id: u32,
@@ -13,6 +12,7 @@ pub struct Bid {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Auction {
+    pub auction_id: u32,
     pub item_name: String,
     #[serde(with = "chrono::serde::ts_seconds")]
     pub start_time: DateTime<Utc>,
@@ -33,6 +33,7 @@ pub enum Transaction {
 
 impl Auction {
     pub fn new(
+        auction_id: u32,
         item_name: String,
         start_time: DateTime<Utc>,
         end_time: DateTime<Utc>,
@@ -41,6 +42,7 @@ impl Auction {
         signature: String,
     ) -> Self {
         Auction {
+            auction_id,
             item_name,
             start_time,
             end_time,
@@ -55,46 +57,94 @@ impl Auction {
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AuctionHouse {
-    pub auctions: HashMap<u32, Auction>,
+    pub auctions: Vec<Auction>,
 }
 
 impl AuctionHouse {
     pub fn new() -> Self {
         AuctionHouse {
-            auctions: HashMap::new(),
+            auctions: Vec::<Auction>::new(),
         }
     }
 
-    pub fn add_auction(&mut self, auction: Auction, id: u32) {
-        self.auctions.insert(id, auction);
+    pub fn add_auction(&mut self, auction: Auction) {
+        self.auctions.push(auction);
     }
 }
-pub fn save_auction_data(auctions: &AuctionHouse) -> Result<(), Box<dyn std::error::Error>> {
+pub fn save_auction_data(
+    auctions: &AuctionHouse,
+    ip_addr: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
     let serialized = serde_json::to_string_pretty(&auctions)?;
-    fs::write("auction_data.json", serialized);
+    fs::write(
+        format!("auctions/auction_data_{}.json", ip_addr),
+        serialized,
+    );
     Ok(())
 }
 
 pub async fn load_auction_data() -> Result<AuctionHouse, Box<dyn std::error::Error>> {
-    let data = fs::read_to_string("auction_data.json")?;
+    let data = fs::read_to_string("/auctions/auction_data.json")?;
     let auctions: AuctionHouse = serde_json::from_str(&data)?;
     Ok(auctions)
 }
-pub fn list_auctions() {
-    let data = fs::read_to_string("auction_data.json").expect("Unable to read file");
-    let auction_house: AuctionHouse =
-        serde_json::from_str(&data).expect("Failed to deserialize JSON");
-    let mut bidding_price = 0.0;
-    for (auction_id, auction) in auction_house.auctions.iter() {
-        if auction.bids.is_empty() {
-            bidding_price = auction.starting_bid;
-        } else {
-            bidding_price = auction.bids[auction.bids.len() - 1].amount;
-        }
+pub async fn list_auctions() -> AuctionHouse {
+    let result = get_files_in_directory("auctions");
+    match result {
+        Ok(n) => {
+            let auction_house = build_auctions_from_files(&n).await;
+            let mut bidding_price;
+            for auction in auction_house.auctions.iter() {
+                if auction.bids.is_empty() {
+                    bidding_price = auction.starting_bid;
+                } else {
+                    bidding_price = auction.bids[auction.bids.len() - 1].amount;
+                }
 
-        println!(
-            "id: {} auction_name: {}, end_time:{}, biding_price: {:?}",
-            auction_id, auction.item_name, auction.end_time, bidding_price
-        )
+                println!(
+                    "id: {} auction_name: {}, end_time:{}, biding_price: {:?}, auction_state:{}",
+                    auction.auction_id,
+                    auction.item_name,
+                    auction.end_time,
+                    bidding_price,
+                    auction.active
+                )
+            }
+            auction_house
+        }
+        Err(_e) => {
+            println!("No auctions available!");
+            AuctionHouse::new()
+        }
     }
+}
+
+async fn build_auctions_from_files(files: &Vec<std::string::String>) -> AuctionHouse {
+    let mut major_auction = AuctionHouse::new();
+    for file in files {
+        let data = fs::read_to_string(format!("auctions/{}", file)).unwrap();
+        let resudual_auction_house: AuctionHouse =
+            serde_json::from_str(&data).expect("Failed to deserialize JSON");
+        for auction in resudual_auction_house.auctions.iter() {
+            major_auction.add_auction(auction.to_owned());
+        }
+    }
+    major_auction
+}
+
+pub fn get_files_in_directory(path: &str) -> io::Result<Vec<String>> {
+    let entries = fs::read_dir(path)?;
+
+    let file_names: Vec<String> = entries
+        .filter_map(|entry| {
+            let path = entry.ok()?.path();
+            if path.is_file() {
+                path.file_name()?.to_str().map(|s| s.to_owned())
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    Ok(file_names)
 }
