@@ -18,7 +18,8 @@ use crate::auction::{
 };
 mod auction_client;
 use crate::auction_client::send_transaction;
-
+mod transactions;
+use crate::transactions::{AuctionTx, Transaction, UserTx};
 use sha2::{Digest, Sha256};
 #[cfg(target_os = "windows")]
 fn clear_screen() {
@@ -181,11 +182,15 @@ async fn register_user() -> User {
     users.push(user.clone()); // Clone user for push to avoid move
     let users_json = serde_json::to_string_pretty(&users).expect("Failed to serialize users");
     fs::write(file_path, users_json).expect("Failed to write to users.json");
-    send_transaction(
-        format!("user: {}, credits {}", user.uid, user.credits),
-        "0.0.0.0",
-    )
-    .await;
+    let pub_key = fs::read_to_string(user.ssh_key_path.clone()).expect("Unable to read ssh file");
+    let tx = UserTx::new(
+        user.uid.clone(),
+        0.0,
+        pub_key,
+        "ansdjandjansdsbn22b12i3h12hduqw12".to_string(),
+    );
+
+    //send_transaction(Transaction::UserTx(tx), "0.0.0.0").await;
     println!("User registered successfully.");
     user // Return the original user, not moved thanks to clone
 }
@@ -210,7 +215,7 @@ async fn auctions_menu(user: &mut User, auction_house: &mut AuctionHouse) {
         match option.trim() {
             "1" => join_auction(user, auction_house).await,
             "2" => create_auction(&user, auction_house).await,
-            "3" => current_auctions(user, auction_house),
+            "3" => current_auctions(auction_house),
             "4" => history(user),
             "5" => break,
             _ => {
@@ -291,13 +296,14 @@ async fn add_credits(user: &mut User) {
     let amount: f32 = amount_str.trim().parse().unwrap();
     user.add_credits(amount);
 
-    //send event to blockchain
-    send_transaction(
-        format!("user: {}, credits {}", user.uid, user.credits),
-        "0.0.0.0",
-    )
-    .await;
-
+    let pub_key = fs::read_to_string(user.ssh_key_path.clone()).expect("Unable to read ssh file");
+    let tx = UserTx::new(
+        user.uid.clone(),
+        user.credits + amount,
+        pub_key,
+        "ansdjandjansdsbn22b12i3h12hduqw12".to_string(),
+    );
+    //send_transaction(Transaction::CreditsUpdateTx(tx), "0.0.0.0").await;
     println!(
         "Credits added successfully! Your new balance is ${}",
         user.credits
@@ -350,21 +356,29 @@ async fn join_auction(user: &mut User, auction_house: &mut AuctionHouse) {
     };
 
     if user.credits >= amount {
-        if let Ok(_) = auction_house.place_bid(auction_id, user.uid.clone(), amount) {
+        if let Ok(_) = auction_house.place_bid(
+            auction_id,
+            user.uid.clone(),
+            amount,
+            "asdansdkasdnaskdnas".to_string(),
+        ) {
             println!("Bid placed successfully for Auction ID {}", auction_id);
             user.credits -= amount; // Update user credits
             save_auction_data(auction_house).expect("Failed to save auction data");
 
-            send_transaction(
-                format!(
-                    "auction_id: {}, bid_value: {}, user_id:{}",
-                    auction_id,
-                    amount.to_string(),
-                    user.uid
-                ),
-                "0.0.0.0",
-            )
-            .await;
+            //Create transanction before sending to server
+            // let tx = AuctionTx::new(
+            //     auction_id,
+            //     auction_house.auctions[&auction_id].item_name.to_string(),
+            //     auction_house.auctions[&auction_id].user_id.to_string(),
+            //     auction_house.auctions[&auction_id].start_time,
+            //     auction_house.auctions[&auction_id].end_time,
+            //     auction_house.auctions[&auction_id].starting_bid,
+            //     user.uid.clone(),
+            //     amount,
+            //     "ajuishduiashduiashduiashduaishdn1iuh31iu238129jwe12n".to_string(),
+            // );
+            send_transaction(auction_house.auctions[&auction_id].clone(), "192.168.1.66").await;
         } else {
             println!("Failed to place bid. Auction might not exist or be closed.");
         }
@@ -403,7 +417,7 @@ async fn create_auction(user: &User, auction_house: &mut AuctionHouse) {
         .trim()
         .parse()
         .expect("Please enter a valid number of days");
-    let end_time = start_time + Duration::days(duration);
+    let end_time = start_time + Duration::minutes(duration);
 
     // Use user.uid to pass the creator's uid to the new auction
     let auction_id = auction_house.generate_auction_id();
@@ -414,23 +428,30 @@ async fn create_auction(user: &User, auction_house: &mut AuctionHouse) {
         end_time,
         starting_bid,
         user.uid.clone(), // Pass the user's uid as the creator
+        "asdasdasdasd".to_string(),
     );
 
-    auction_house.add_auction(auction);
+    auction_house.add_auction(auction.clone());
     save_auction_data(auction_house).expect("Failed to save auction data");
-    send_transaction(
-        format!(
-            "auction_id: {}, item_name: {}, starting_bid:{}",
-            auction_id, item_name, starting_bid
-        ),
-        "0.0.0.0",
-    )
-    .await;
+
+    //Create transanction before sending to server
+    // let tx = AuctionTx::new(
+    //     auction_id,
+    //     item_name,
+    //     user.uid.clone(),
+    //     start_time,
+    //     end_time,
+    //     starting_bid,
+    //     "".to_string(),
+    //     0.0,
+    //     "ajuishduiashduiashduiashduaishdn1iuh31iu238129jwe12n".to_string(),
+    // );
+    send_transaction(auction, "192.168.1.66").await;
     println!("Auction created successfully!");
     pause();
 }
 
-fn current_auctions(user: &User, auction_house: &AuctionHouse) {
+fn current_auctions(auction_house: &AuctionHouse) {
     clear_screen();
     println!("Active Auctions:");
     auction_house.list_active_auctions();

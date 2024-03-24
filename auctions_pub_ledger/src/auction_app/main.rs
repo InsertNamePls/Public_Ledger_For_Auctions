@@ -10,15 +10,16 @@ use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use std::{fs, usize};
 //use std::fs::{self, File};
-use std::io::{self, Read, Write};
-use std::path::Path;
-
 use crate::auction::{
     list_auctions, load_auction_data, save_auction_data, AuctionHouse, Transaction,
 };
 use crate::auction::{Auction, Bid};
+use auction_client::send_transaction;
+use std::env;
+use std::io::{self, Read, Write};
+use std::path::Path;
 mod auction_client;
-use crate::auction_client::{request_auction_house, send_transaction};
+use crate::auction_client::request_auction_house;
 use sha256::digest;
 
 #[cfg(not(target_os = "windows"))]
@@ -37,7 +38,8 @@ async fn main() {
     //     }
     // };
     clear_screen();
-
+    let args: Vec<String> = env::args().collect();
+    let ips = args[0].clone();
     println!("Welcome to the BidBuddie's Auction System!");
 
     println!("Please select an option:\n1. Login\n2. Register");
@@ -70,7 +72,7 @@ async fn main() {
             .expect("Failed to read line");
 
         match option.trim() {
-            "1" => auctions_menu(&mut user).await,
+            "1" => auctions_menu(&mut user, args[1].split(",").map(String::from).collect()).await,
             "2" => profile_menu(&mut user).await,
             "3" => {
                 println!("Exiting...");
@@ -166,7 +168,7 @@ async fn register_user() -> User {
     user // Return the original user, not moved thanks to clone
 }
 
-async fn auctions_menu(user: &mut User) {
+async fn auctions_menu(user: &mut User, dest_ip: Vec<String>) {
     loop {
         clear_screen();
         println!("=== Auctions Menu ===");
@@ -184,9 +186,9 @@ async fn auctions_menu(user: &mut User) {
             .expect("Failed to read line");
 
         match option.trim() {
-            "1" => join_auction(user).await,
-            "2" => create_auction(&user).await,
-            "3" => current_auctions().await,
+            "1" => join_auction(user, &dest_ip).await,
+            "2" => create_auction(&user, &dest_ip).await,
+            "3" => current_auctions(&dest_ip).await,
             "4" => history(user),
             "5" => break,
             _ => {
@@ -275,8 +277,10 @@ async fn add_credits(user: &mut User) {
     // Implementation for adding credits to the user's account
 }
 
-async fn join_auction(user: &mut User) {
+async fn join_auction(user: &mut User, dest_ip: &Vec<String>) {
     clear_screen();
+
+    request_auction_house(dest_ip).await;
     list_auctions().await;
     let mut auction_id = 0;
     loop {
@@ -322,14 +326,14 @@ async fn join_auction(user: &mut User) {
             amount,
             signature: "asdansdkasdnaskdnas".to_string(),
         };
-        send_transaction(Transaction::Bid(bid), "0.0.0.0").await;
+        send_transaction(&Transaction::Bid(bid), dest_ip[0].clone()).await;
     } else {
         println!("Insufficient credits to place bid.");
     }
     pause();
 }
 
-async fn create_auction(user: &User) {
+async fn create_auction(user: &User, dest_ip: &Vec<String>) {
     clear_screen();
     println!("Creating a new auction.");
     println!("Enter the item name:");
@@ -359,9 +363,12 @@ async fn create_auction(user: &User) {
         .parse()
         .expect("Please enter a valid number of days");
     let end_time = start_time + Duration::minutes(duration);
+
+    request_auction_house(dest_ip).await;
+    let auction_house = list_auctions().await;
     // Use user.uid to pass the creator's uid to the new auction
     let auction = Auction::new(
-        0,
+        auction_house.auctions.len() as u32,
         item_name.trim().to_string(),
         start_time,
         end_time,
@@ -370,17 +377,17 @@ async fn create_auction(user: &User) {
         "asdasdasdasd".to_string(),
     );
 
-    send_transaction(Transaction::Auction(auction.clone()), "0.0.0.0").await;
+    send_transaction(&Transaction::Auction(auction.clone()), dest_ip[0].clone()).await;
     println!("Auction created successfully!");
     pause();
 }
 
-async fn current_auctions() {
+async fn current_auctions(dest_ip: &Vec<String>) {
     clear_screen();
 
     println!("Active Auctions:");
 
-    request_auction_house("0.0.0.0").await;
+    request_auction_house(dest_ip).await;
 
     list_auctions().await;
     pause();

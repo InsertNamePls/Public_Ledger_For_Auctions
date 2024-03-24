@@ -6,6 +6,7 @@ use std::fs;
 pub struct Bid {
     pub bidder: String,
     pub amount: f32,
+    pub signature: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -17,9 +18,10 @@ pub struct Auction {
     #[serde(with = "chrono::serde::ts_seconds")]
     pub end_time: DateTime<Utc>,
     pub starting_bid: f32,
-    pub bids: Vec<Bid>,
-    pub active: bool,
+    pub bids: Vec<Bid>, //to be removed
+    pub active: bool,   //to be remove
     pub user_id: String,
+    pub signature: String,
 }
 
 impl Auction {
@@ -30,6 +32,7 @@ impl Auction {
         end_time: DateTime<Utc>,
         starting_bid: f32,
         user_id: String,
+        signature: String,
     ) -> Self {
         Auction {
             id,
@@ -40,10 +43,16 @@ impl Auction {
             bids: Vec::new(),
             active: true,
             user_id,
+            signature,
         }
     }
 
-    pub fn place_bid(&mut self, bidder: String, amount: f32) -> Result<(), &'static str> {
+    pub fn place_bid(
+        &mut self,
+        bidder: String,
+        amount: f32,
+        signature: String,
+    ) -> Result<(), &'static str> {
         if !self.active || Utc::now() > self.end_time {
             return Err("Auction is not active or has ended.");
         }
@@ -54,7 +63,11 @@ impl Auction {
         } else if amount < self.starting_bid {
             return Err("Bid must be higher than the starting bid.");
         }
-        self.bids.push(Bid { bidder, amount });
+        self.bids.push(Bid {
+            bidder,
+            amount,
+            signature,
+        });
         Ok(())
     }
 
@@ -105,19 +118,17 @@ impl AuctionHouse {
         auction_id: u32,
         bidder: String,
         amount: f32,
+        signature: String,
     ) -> Result<(), &'static str> {
         if let Some(auction) = self.auctions.get_mut(&auction_id) {
-            return auction.place_bid(bidder, amount);
+            return auction.place_bid(bidder, amount, signature);
         }
         Err("Auction not found.")
     }
 }
-pub struct AuctionTransaction {
-    auction_id: u32,
-}
 pub fn save_auction_data(auctions: &AuctionHouse) -> Result<(), Box<dyn std::error::Error>> {
     let serialized = serde_json::to_string_pretty(&auctions)?;
-    fs::write("auction_data.json", serialized)?;
+    fs::write("auction_data.json", serialized);
     Ok(())
 }
 
@@ -138,6 +149,7 @@ pub fn generate_initial_auction_data() -> AuctionHouse {
         end_time,
         50.0,
         "example_user".to_string(),
+        "".to_string(),
     );
     auction_house.add_auction(auction);
     auction_house
