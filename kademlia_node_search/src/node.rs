@@ -1,7 +1,6 @@
-// node.rs
-
-use tonic::{Request, Response, Status};
-use crate::kademlia::{kademlia_server::Kademlia, PingRequest, PingResponse, StoreRequest, StoreResponse, FindNodeRequest, FindNodeResponse, FindValueRequest, FindValueResponse};
+use tonic::{transport::Server, Request, Response, Status};
+use crate::kademlia::kademlia_server::{Kademlia, KademliaServer};
+use crate::kademlia::{PingRequest, PingResponse, StoreRequest, StoreResponse, FindNodeRequest, FindNodeResponse, FindValueRequest, FindValueResponse};
 
 pub struct Node {}
 
@@ -27,4 +26,17 @@ impl Kademlia for Node {
         // Implement FIND_VALUE logic here
         unimplemented!()
     }
+}
+
+
+pub async fn run_server(addr: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let addr = addr.parse()?;
+    let node = Node {};
+
+    Server::builder()
+        .add_service(KademliaServer::new(node))
+        .serve(addr)
+        .await?;
+
+    Ok(())
 }
