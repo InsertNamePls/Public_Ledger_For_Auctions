@@ -1,0 +1,50 @@
+syntax = "proto3";
+
+package kademlia;
+
+// The Node identifier and network address are encapsulated in the NodeInfo message.
+message NodeInfo {
+    string id = 1; // Unique identifier of the node
+    string address = 2; // Network address of the node
+}
+
+message PingRequest {
+    string sourceNodeId = 1; // The ID of the pinging node
+}
+
+message PingResponse {
+    bool isOnline = 1; // Whether the pinged node is online
+}
+
+message StoreRequest {
+    string key = 1; // Key of the key-value pair
+    string value = 2; // Value of the key-value pair
+}
+
+message StoreResponse {
+    bool success = 1; // Whether the STORE operation was successful
+}
+
+message FindNodeRequest {
+    string targetNodeId = 1; // ID of the node being searched for
+}
+
+message FindNodeResponse {
+    repeated NodeInfo nodes = 1; // List of closest nodes to the target ID
+}
+
+message FindValueRequest {
+    string key = 1; // Key for which the value is being searched
+}
+
+message FindValueResponse {
+    string value = 1; // Value associated with the key, if found
+    repeated NodeInfo nodes = 2; // List of closest nodes to the key, if value not found
+}
+
+service Kademlia {
+    rpc Ping(PingRequest) returns (PingResponse);
+    rpc Store(StoreRequest) returns (StoreResponse);
+    rpc FindNode(FindNodeRequest) returns (FindNodeResponse);
+    rpc FindValue(FindValueRequest) returns (FindValueResponse);
+}
