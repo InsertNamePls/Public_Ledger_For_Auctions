@@ -5,29 +5,16 @@ use chrono::Duration;
 use std::collections::HashMap;
 use user::User;
 
+use crate::auction::{list_auctions, Transaction};
+use crate::auction::{Auction, Bid};
+use auction_client::send_transaction;
 use chrono::Utc;
-use serde::{Deserialize, Serialize};
+use std::env;
 use std::fs;
-//use std::fs::{self, File};
-use std::io::{self, Read, Write};
-use std::path::Path;
-
-use crate::auction::Auction;
-use crate::auction::{
-    generate_initial_auction_data, load_auction_data, save_auction_data, AuctionHouse,
-};
+use std::io::{self, Write};
 mod auction_client;
-use crate::auction_client::send_transaction;
-mod transactions;
-use crate::transactions::{AuctionTx, Transaction, UserTx};
-use sha2::{Digest, Sha256};
-#[cfg(target_os = "windows")]
-fn clear_screen() {
-    std::process::Command::new("cmd")
-        .args(&["/C", "cls"])
-        .status()
-        .unwrap();
-}
+use crate::auction_client::request_auction_house;
+use sha256::digest;
 
 #[cfg(not(target_os = "windows"))]
 fn clear_screen() {
@@ -37,16 +24,16 @@ fn clear_screen() {
 #[tokio::main]
 async fn main() {
     // Change this for a scrapping function later on
-    let mut auction_house = match load_auction_data() {
-        Ok(data) => data,
-        Err(_) => {
-            let initial_data = generate_initial_auction_data(); // for testing purposes later change.
-            save_auction_data(&initial_data).expect("Failed to save initial auction data");
-            initial_data
-        }
-    };
+    // let mut auction_house = match load_auction_data().await {
+    //     Ok(data) => data,
+    //     Err(_) => {
+    //         println!("error geting acoution house");
+    //         exit(0);
+    //     }
+    // };
     clear_screen();
-
+    let args: Vec<String> = env::args().collect();
+    let ips = args[0].clone();
     println!("Welcome to the BidBuddie's Auction System!");
 
     println!("Please select an option:\n1. Login\n2. Register");
@@ -79,7 +66,7 @@ async fn main() {
             .expect("Failed to read line");
 
         match option.trim() {
-            "1" => auctions_menu(&mut user, &mut auction_house).await,
+            "1" => auctions_menu(&mut user, args[1].split(",").map(String::from).collect()).await,
             "2" => profile_menu(&mut user).await,
             "3" => {
                 println!("Exiting...");
@@ -162,40 +149,20 @@ async fn register_user() -> User {
         ssh_key_path: ssh_key_path.trim().to_string(),
     };
 
-    // Attempt to store the SSH key, reporting any errors encountered
-    //match user.store_ssh_key() {
-    //    Ok(_) => println!("SSH key stored successfully."),
-    //    Err(e) => println!("Failed to store SSH key: {}", e),
-    //}
-
     // Path to the JSON file where users are stored
     let file_path = "users.json";
     let mut users = Vec::new();
-
-    // Check if file exists and read the existing users
-    //if Path::new(file_path).exists() {
-    //    let data = fs::read_to_string(file_path).expect("Failed to read users.json");
-    //    users = serde_json::from_str(&data).expect("Failed to deserialize users");
-    //}
 
     // Add the new user to the vector and write it back to the file
     users.push(user.clone()); // Clone user for push to avoid move
     let users_json = serde_json::to_string_pretty(&users).expect("Failed to serialize users");
     fs::write(file_path, users_json).expect("Failed to write to users.json");
-    let pub_key = fs::read_to_string(user.ssh_key_path.clone()).expect("Unable to read ssh file");
-    let tx = UserTx::new(
-        user.uid.clone(),
-        0.0,
-        pub_key,
-        "ansdjandjansdsbn22b12i3h12hduqw12".to_string(),
-    );
 
-    //send_transaction(Transaction::UserTx(tx), "0.0.0.0").await;
     println!("User registered successfully.");
     user // Return the original user, not moved thanks to clone
 }
 
-async fn auctions_menu(user: &mut User, auction_house: &mut AuctionHouse) {
+async fn auctions_menu(user: &mut User, dest_ip: Vec<String>) {
     loop {
         clear_screen();
         println!("=== Auctions Menu ===");
@@ -213,9 +180,9 @@ async fn auctions_menu(user: &mut User, auction_house: &mut AuctionHouse) {
             .expect("Failed to read line");
 
         match option.trim() {
-            "1" => join_auction(user, auction_house).await,
-            "2" => create_auction(&user, auction_house).await,
-            "3" => current_auctions(auction_house),
+            "1" => join_auction(user, &dest_ip).await,
+            "2" => create_auction(&user, &dest_ip).await,
+            "3" => current_auctions(&dest_ip).await,
             "4" => history(user),
             "5" => break,
             _ => {
@@ -296,14 +263,6 @@ async fn add_credits(user: &mut User) {
     let amount: f32 = amount_str.trim().parse().unwrap();
     user.add_credits(amount);
 
-    let pub_key = fs::read_to_string(user.ssh_key_path.clone()).expect("Unable to read ssh file");
-    let tx = UserTx::new(
-        user.uid.clone(),
-        user.credits + amount,
-        pub_key,
-        "ansdjandjansdsbn22b12i3h12hduqw12".to_string(),
-    );
-    //send_transaction(Transaction::CreditsUpdateTx(tx), "0.0.0.0").await;
     println!(
         "Credits added successfully! Your new balance is ${}",
         user.credits
@@ -312,12 +271,11 @@ async fn add_credits(user: &mut User) {
     // Implementation for adding credits to the user's account
 }
 
-async fn join_auction(user: &mut User, auction_house: &mut AuctionHouse) {
+async fn join_auction(user: &mut User, dest_ip: &Vec<String>) {
     clear_screen();
 
-    println!("Active Auctions:");
-    auction_house.list_active_auctions();
-
+    request_auction_house(dest_ip).await;
+    list_auctions().await;
     let mut auction_id = 0;
     loop {
         println!("Enter the Auction ID you want to join (or 'exit' to cancel):");
@@ -336,7 +294,7 @@ async fn join_auction(user: &mut User, auction_house: &mut AuctionHouse) {
         match trimmed_input.parse::<u32>() {
             Ok(id) => {
                 auction_id = id;
-                break; // Exit the loop on successful parse
+                break; // Exit the loop on successful parse/
             }
             Err(_) => println!("Please enter a valid ID or 'exit' to cancel."),
         }
@@ -356,39 +314,20 @@ async fn join_auction(user: &mut User, auction_house: &mut AuctionHouse) {
     };
 
     if user.credits >= amount {
-        if let Ok(_) = auction_house.place_bid(
+        let bid = Bid {
             auction_id,
-            user.uid.clone(),
+            bidder: user.uid.clone(),
             amount,
-            "asdansdkasdnaskdnas".to_string(),
-        ) {
-            println!("Bid placed successfully for Auction ID {}", auction_id);
-            user.credits -= amount; // Update user credits
-            save_auction_data(auction_house).expect("Failed to save auction data");
-
-            //Create transanction before sending to server
-            // let tx = AuctionTx::new(
-            //     auction_id,
-            //     auction_house.auctions[&auction_id].item_name.to_string(),
-            //     auction_house.auctions[&auction_id].user_id.to_string(),
-            //     auction_house.auctions[&auction_id].start_time,
-            //     auction_house.auctions[&auction_id].end_time,
-            //     auction_house.auctions[&auction_id].starting_bid,
-            //     user.uid.clone(),
-            //     amount,
-            //     "ajuishduiashduiashduiashduaishdn1iuh31iu238129jwe12n".to_string(),
-            // );
-            send_transaction(auction_house.auctions[&auction_id].clone(), "192.168.1.66").await;
-        } else {
-            println!("Failed to place bid. Auction might not exist or be closed.");
-        }
+            signature: "asdansdkasdnaskdnas".to_string(),
+        };
+        send_transaction(&Transaction::Bid(bid), dest_ip[0].clone()).await;
     } else {
         println!("Insufficient credits to place bid.");
     }
     pause();
 }
 
-async fn create_auction(user: &User, auction_house: &mut AuctionHouse) {
+async fn create_auction(user: &User, dest_ip: &Vec<String>) {
     clear_screen();
     println!("Creating a new auction.");
     println!("Enter the item name:");
@@ -419,10 +358,11 @@ async fn create_auction(user: &User, auction_house: &mut AuctionHouse) {
         .expect("Please enter a valid number of days");
     let end_time = start_time + Duration::minutes(duration);
 
+    request_auction_house(dest_ip).await;
+    let auction_house = list_auctions().await;
     // Use user.uid to pass the creator's uid to the new auction
-    let auction_id = auction_house.generate_auction_id();
     let auction = Auction::new(
-        auction_id,
+        auction_house.auctions.len() as u32,
         item_name.trim().to_string(),
         start_time,
         end_time,
@@ -431,30 +371,19 @@ async fn create_auction(user: &User, auction_house: &mut AuctionHouse) {
         "asdasdasdasd".to_string(),
     );
 
-    auction_house.add_auction(auction.clone());
-    save_auction_data(auction_house).expect("Failed to save auction data");
-
-    //Create transanction before sending to server
-    // let tx = AuctionTx::new(
-    //     auction_id,
-    //     item_name,
-    //     user.uid.clone(),
-    //     start_time,
-    //     end_time,
-    //     starting_bid,
-    //     "".to_string(),
-    //     0.0,
-    //     "ajuishduiashduiashduiashduaishdn1iuh31iu238129jwe12n".to_string(),
-    // );
-    send_transaction(auction, "192.168.1.66").await;
+    send_transaction(&Transaction::Auction(auction.clone()), dest_ip[0].clone()).await;
     println!("Auction created successfully!");
     pause();
 }
 
-fn current_auctions(auction_house: &AuctionHouse) {
+async fn current_auctions(dest_ip: &Vec<String>) {
     clear_screen();
+
     println!("Active Auctions:");
-    auction_house.list_active_auctions();
+
+    request_auction_house(dest_ip).await;
+
+    list_auctions().await;
     pause();
 }
 
@@ -473,17 +402,6 @@ fn pause() {
 }
 
 fn gen_uid(ssh_key_path: &str, user_name: String) -> String {
-    let mut hasher = Sha256::new();
-    println!("{}", ssh_key_path);
     let pub_key = fs::read_to_string(ssh_key_path).expect("Unable to read file");
-
-    println!();
-    hasher.update(user_name + &pub_key);
-    let result = hasher
-        .finalize()
-        .iter()
-        .map(|b| format!("{:02x}", b))
-        .collect::<String>();
-    println!("{}", result);
-    result
+    digest(user_name + &pub_key)
 }

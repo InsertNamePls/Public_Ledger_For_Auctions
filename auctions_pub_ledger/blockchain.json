@@ -1,0 +1,12 @@
+{
+  "blocks": [
+    {
+      "index": 0,
+      "prev_hash": "",
+      "nounce": 37845,
+      "timestamp": 1710984345933,
+      "hash": "000006c1e30e76c326fbd576be446c9e1bf9cb682450edd44702200a80be59e1",
+      "tx": []
+    }
+  ]
+}

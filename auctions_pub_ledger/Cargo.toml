@@ -1,0 +1,21 @@
+[package]
+name = "auctions_pub_ledger"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+sha256 = "1.5.0"
+serde = { version = "1", features = ["derive"] }
+serde_json = {version = "1.0"}
+chrono = { version = "0.4", features = ["serde"] }
+tokio = { version = "1", features = ["full"] }
+local-ip-address = "0.6.1"
+async-std = "1.9"
+[[bin]]
+name="main"
+path="src/main.rs"
+[[bin]]
+name="auction"
+path="src/auction_app/main.rs"

@@ -1,10 +1,6 @@
-use crate::auction::{Auction, AuctionHouse};
-use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::fs::{self, File};
-use std::io::Write;
-use std::path::Path;
+use std::fs::{self};
 
 // The AuctionActivity enum is used to store the activities of the user in the auctions.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -79,40 +75,4 @@ impl User {
         let ssh_key = fs::read_to_string(&self.ssh_key_path)?;
         Ok(ssh_key)
     }
-
-    pub fn place_bid_with_auction_house(
-        &mut self,
-        auction_house: &mut AuctionHouse,
-        auction_id: u32,
-        bid_amount: f32,
-        signature: String,
-    ) -> Result<(), &'static str> {
-        if self.credits < bid_amount {
-            return Err("Insufficient credits.");
-        }
-        match auction_house.place_bid(auction_id, self.uid.clone(), bid_amount, signature) {
-            Ok(()) => {
-                self.credits -= bid_amount;
-                Ok(())
-            }
-            Err(e) => Err(e),
-        }
-    }
-
-    // pub fn store_ssh_key(&self) -> std::io::Result<()> {
-    //     // Ensure the "public_ssh_key" directory exists
-    //     let dir_path = "public_ssh_key";
-    //     fs::create_dir_all(dir_path)?;
-    //
-    //     // Reading the SSH public key from the provided path
-    //     let ssh_key = fs::read_to_string(&self.ssh_key_path)?;
-    //
-    //     // Creating a file name based on the user uid
-    //     let file_name = format!("{}/{}-ssh_key.pub", dir_path, self.user_name);
-    //
-    //     // Creating and writing the SSH public key to the file
-    //     let mut file = File::create(Path::new(&file_name))?;
-    //     file.write_all(ssh_key.as_bytes())?;
-    //     Ok(())
-    // }
 }
