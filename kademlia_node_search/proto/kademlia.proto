@@ -4,16 +4,17 @@ package kademlia;
 
 // The Node identifier and network address are encapsulated in the NodeInfo message.
 message NodeInfo {
-    string id = 1; // Unique identifier of the node
+    bytes id = 1; // Unique identifier of the node
     string address = 2; // Network address of the node
 }
 
 message PingRequest {
-    string sourceNodeId = 1; // The ID of the pinging node
+    string node_address = 1; // The ID of the pinging node
 }
 
 message PingResponse {
     bool isOnline = 1; // Whether the pinged node is online
+    bytes node_id = 2; // The Target node ID
 }
 
 message StoreRequest {
@@ -26,7 +27,7 @@ message StoreResponse {
 }
 
 message FindNodeRequest {
-    string targetNodeId = 1; // ID of the node being searched for
+    bytes targetNodeId = 1; // ID of the node being searched for
 }
 
 message FindNodeResponse {

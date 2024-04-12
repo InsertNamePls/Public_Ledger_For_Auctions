@@ -1,8 +1,11 @@
 use bytes::Bytes;
 use std::collections::VecDeque;
 use std::net::SocketAddr;
+use crate::kademlia::NodeInfo as ProtoNodeInfo;
+
 
 const K: usize = 20; // The maximum number of nodes in a bucket
+const N_BITS: usize = 160; // The number of bits in the node ID
 
 #[derive(Clone)]
 pub struct NodeInfo {
@@ -37,7 +40,7 @@ pub struct RoutingTable {
 impl RoutingTable {
     pub fn new() -> Self {
         Self {
-            buckets: vec![Bucket::new(); 160], // 160 is the number of bits in the node ID
+            buckets: vec![Bucket::new(); N_BITS],
         }
     }
 
@@ -52,9 +55,29 @@ impl RoutingTable {
     }
 
     fn calculate_bucket_index(&self, id: &Bytes) -> usize {
-        // This is a placeholder implementation. In a real implementation, you would calculate the
-        // bucket index based on the XOR distance between the id and the ID of the node that owns
-        // this routing table.
-        0
+        let table_id = &self.buckets[0].nodes[0].id; // Assuming the first bucket and first node as the owner
+        let xor_distance = Self::xor_distance(id, table_id);
+        let leading_zeros = xor_distance.leading_zeros() as usize;
+        leading_zeros
     }
+
+    fn xor_distance(id1: &Bytes, id2: &Bytes) -> u128 {
+        let mut result = 0;
+        for (byte1, byte2) in id1.iter().zip(id2.iter()) {
+            result = (result << 8) | (byte1 ^ byte2) as u128;
+        }
+        result
+    }
+
+    pub fn from_proto_nodes(proto_nodes: Vec<ProtoNodeInfo>) -> Vec<NodeInfo> {
+        let mut nodes: Vec<NodeInfo> = Vec::new();
+        for proto_node in proto_nodes {
+            let id = Bytes::from(proto_node.id);
+            let addr = proto_node.address.parse().expect("Failed to parse SocketAddr");
+            let node_info = NodeInfo { id, addr };
+            nodes.push(node_info);
+        }
+        nodes
+    }
+    
 }

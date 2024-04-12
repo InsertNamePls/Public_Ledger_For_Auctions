@@ -24,7 +24,7 @@ pub async fn run_client(target: &str, command: &str) -> Result<(), Box<dyn std::
 
                 // Prepare and send a Ping request
                 let request = Request::new(PingRequest {
-                    source_node_id: "client_node_id".into(), // Example node ID, adjust as needed
+                    node_address: "client_node_id".into(), // Example node ID, adjust as needed
                 });
 
                 match client.ping(request).await {

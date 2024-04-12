@@ -15,3 +15,4 @@ Cargo.lock
 
 # Directory to store public SSH keys - ignored by Git
 public_ssh_key/
+.vscode/settings.json
