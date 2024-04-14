@@ -1,21 +1,26 @@
 mod auction;
 mod user;
-
-use chrono::Duration;
-use std::collections::HashMap;
-use user::User;
-
 use crate::auction::{list_auctions, Transaction};
 use crate::auction::{Auction, Bid};
 use auction_client::send_transaction;
+use chrono::Duration;
 use chrono::Utc;
+use ecdsa::SignatureBytes;
+use k256::ecdsa::SigningKey;
+use std::collections::HashMap;
 use std::env;
+use std::error::Error;
 use std::fs;
 use std::io::{self, Write};
+use user::User;
 mod auction_client;
 use crate::auction_client::request_auction_house;
 use sha256::digest;
 
+#[path = "../cryptography/ecdsa_keys.rs"]
+mod keys;
+use crate::keys::{generate_ecdsa_keypair, load_ecdsa_keys};
+use k256::ecdsa::{signature::Signer, Signature, VerifyingKey};
 #[cfg(not(target_os = "windows"))]
 fn clear_screen() {
     std::process::Command::new("clear").status().unwrap();
@@ -87,30 +92,20 @@ fn login() -> User {
         .expect("Failed to read line");
     let username = username.trim();
 
-    println!("Enter the path to your SSH key:");
-    let mut ssh_key_path = String::new();
-    io::stdin()
-        .read_line(&mut ssh_key_path)
-        .expect("Failed to read line");
-    let ssh_key_path = ssh_key_path.trim();
-
     // Load users from "users.json"
     let users = load_users_from_file("users.json").expect("Failed to load users");
 
-    let uid = gen_uid(ssh_key_path, username.to_string());
-
-    println!("{}", uid);
-
+    //
     // Attempt to find the user with the given uid and ssh_key_path
 
     for user in users {
-        if user.uid == uid && user.user_name == username {
-            println!("Login successful for user: {}", username);
+        if user.user_name == username {
             return user;
         }
     }
     clear_screen();
-    println!("Login failed. Username or SSH key path does not match.");
+
+    println!("Login failed. User don't exist!!!");
     login() // Retry login
 }
 
@@ -132,21 +127,12 @@ async fn register_user() -> User {
         .read_line(&mut username)
         .expect("Failed to read line");
 
-    println!("Enter the path to your SSH key:");
-    let mut ssh_key_path = String::new();
-    io::stdin()
-        .read_line(&mut ssh_key_path)
-        .expect("Failed to read line");
-
-    let uid = gen_uid(ssh_key_path.trim(), username.trim().to_string());
-
-    println!("{}", uid);
+    let (private_key, public_key) = generate_ecdsa_keypair();
     let user = User {
-        uid: uid,
+        uid: hex::encode(public_key.to_sec1_bytes()),
         user_name: username.trim().to_string(),
         credits: 0.0,
         participated_auctions: HashMap::new(),
-        ssh_key_path: ssh_key_path.trim().to_string(),
     };
 
     // Path to the JSON file where users are stored
@@ -163,6 +149,7 @@ async fn register_user() -> User {
 }
 
 async fn auctions_menu(user: &mut User, dest_ip: Vec<String>) {
+    let (private_key, _) = load_ecdsa_keys(user.uid.clone());
     loop {
         clear_screen();
         println!("=== Auctions Menu ===");
@@ -180,8 +167,8 @@ async fn auctions_menu(user: &mut User, dest_ip: Vec<String>) {
             .expect("Failed to read line");
 
         match option.trim() {
-            "1" => join_auction(user, &dest_ip).await,
-            "2" => create_auction(&user, &dest_ip).await,
+            "1" => join_auction(user, &dest_ip, private_key.clone()).await,
+            "2" => create_auction(&user, &dest_ip, private_key.clone()).await,
             "3" => current_auctions(&dest_ip).await,
             "4" => history(user),
             "5" => break,
@@ -227,25 +214,6 @@ fn view_profile(user: &User) {
     println!("Username: {}", user.user_name);
     println!("Credits: ${}", user.credits);
 
-    // Attempting to read the SSH public key from the provided path
-    let ssh_key_result = std::fs::read_to_string(&user.ssh_key_path);
-
-    // Handling the Result to safely access the SSH public key content
-    match ssh_key_result {
-        Ok(ssh_key) => {
-            // If reading was successful, print the SSH public key
-            println!("SSH Key Path: {}", user.ssh_key_path);
-            println!("SSH Public Key Content:\n{}", ssh_key);
-        }
-        Err(e) => {
-            // If there was an error reading the file, print an error message instead
-            println!(
-                "Failed to read SSH public key from '{}': {}",
-                user.ssh_key_path, e
-            );
-        }
-    }
-
     // Displaying the user's participated auctions:
     println!("Participated Auctions:");
     user.list_participated_auctions();
@@ -271,7 +239,7 @@ async fn add_credits(user: &mut User) {
     // Implementation for adding credits to the user's account
 }
 
-async fn join_auction(user: &mut User, dest_ip: &Vec<String>) {
+async fn join_auction(user: &mut User, dest_ip: &Vec<String>, private_key: SigningKey) {
     clear_screen();
 
     request_auction_house(dest_ip).await;
@@ -313,21 +281,25 @@ async fn join_auction(user: &mut User, dest_ip: &Vec<String>) {
         }
     };
 
+    let signed_content = digest(auction_id.to_string() + &user.uid.clone() + &amount.to_string());
+    let signature: Signature = private_key.sign(signed_content.as_bytes());
+    println!("{:?}", signature);
     if user.credits >= amount {
         let bid = Bid {
             auction_id,
             bidder: user.uid.clone(),
             amount,
-            signature: "asdansdkasdnaskdnas".to_string(),
+            signature: hex::encode(signature.to_bytes()),
         };
-        send_transaction(&Transaction::Bid(bid), dest_ip[0].clone()).await;
+
+        send_transaction(Transaction::Bid(bid.clone()), dest_ip[0].clone()).await;
     } else {
         println!("Insufficient credits to place bid.");
     }
     pause();
 }
 
-async fn create_auction(user: &User, dest_ip: &Vec<String>) {
+async fn create_auction(user: &User, dest_ip: &Vec<String>, private_key: SigningKey) {
     clear_screen();
     println!("Creating a new auction.");
     println!("Enter the item name:");
@@ -360,6 +332,15 @@ async fn create_auction(user: &User, dest_ip: &Vec<String>) {
 
     request_auction_house(dest_ip).await;
     let auction_house = list_auctions().await;
+
+    let signed_content = digest(
+        auction_house.auctions.len().to_string()
+            + item_name.trim()
+            + &starting_bid.to_string()
+            + &user.uid.clone().to_string(),
+    );
+    let signature: Signature = private_key.sign(signed_content.as_bytes());
+
     // Use user.uid to pass the creator's uid to the new auction
     let auction = Auction::new(
         auction_house.auctions.len() as u32,
@@ -368,10 +349,11 @@ async fn create_auction(user: &User, dest_ip: &Vec<String>) {
         end_time,
         starting_bid,
         user.uid.clone(), // Pass the user's uid as the creator
-        "asdasdasdasd".to_string(),
+        hex::encode(signature.to_bytes()),
     );
 
-    send_transaction(&Transaction::Auction(auction.clone()), dest_ip[0].clone()).await;
+    send_transaction(Transaction::Auction(auction.clone()), dest_ip[0].clone()).await;
+    //send_transaction(&Transaction::Auction(auction.clone()), dest_ip[0].clone()).await;
     println!("Auction created successfully!");
     pause();
 }

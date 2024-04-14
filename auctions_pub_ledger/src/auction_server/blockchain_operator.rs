@@ -6,6 +6,7 @@ use std::{fs, usize};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::Mutex;
+
 const DIFICULTY: usize = 4;
 
 pub async fn block_generator(blockchain: Blockchain, tx: Vec<String>) -> Block {

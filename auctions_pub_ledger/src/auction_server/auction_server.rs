@@ -1,10 +1,14 @@
 use super::auction::*;
 use crate::auction_client::send_transaction;
 use chrono::Utc;
+use k256::ecdsa::Signature;
+use k256::ecdsa::{signature::Verifier, VerifyingKey};
 use std::fs;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 
+use elliptic_curve::generic_array::GenericArray;
+use sha256::digest;
 pub async fn retrieve_auction_house() {
     let listener = TcpListener::bind("0.0.0.0:3004").await.unwrap();
 
@@ -44,11 +48,10 @@ pub async fn auction_server(dest_ip: String) {
                 match transaction {
                     Transaction::Bid(ref value) => {
                         println!("\n{:?}", value);
-
                         find_auction_to_bid(
                             auction_house.clone(),
                             &value,
-                            &transaction.clone(),
+                            transaction.clone(),
                             socket,
                             dest_ip.clone(),
                         )
@@ -57,9 +60,24 @@ pub async fn auction_server(dest_ip: String) {
                     Transaction::Auction(value) => {
                         println!("\n{:?}", auction_house);
 
-                        auction_house.add_auction(value);
-                        let serialized = serde_json::to_string_pretty(&auction_house).unwrap();
-                        fs::write("auction_data.json", serialized);
+                        let signed_content = digest(
+                            value.auction_id.to_string()
+                                + &value.item_name
+                                + &value.starting_bid.to_string()
+                                + &value.user_id.to_string(),
+                        );
+                        if validate_tx_integrity(
+                            &signed_content,
+                            &value.user_id,
+                            value.signature.clone(),
+                        )
+                        .await
+                        {
+                            auction_house.add_auction(value);
+                            let serialized = serde_json::to_string_pretty(&auction_house).unwrap();
+                            fs::write("auction_data.json", serialized)
+                                .expect("error saving auction");
+                        }
                     }
                 }
                 println!("{:?}", auction_house);
@@ -70,10 +88,27 @@ pub async fn auction_server(dest_ip: String) {
         }
     }
 }
+pub async fn validate_tx_integrity(
+    signed_content: &String,
+    uid: &String,
+    sig_string: String,
+) -> bool {
+    // get puiblic key from uid hex value
+    let public_key = VerifyingKey::from_sec1_bytes(&hex::decode(uid).unwrap())
+        .expect("error converting uid to public key");
+
+    let sig: Signature = Signature::from_bytes(&GenericArray::clone_from_slice(
+        &hex::decode(sig_string).unwrap(),
+    ))
+    .expect("error decoding signature");
+
+    // validate signature with the concat of parameters
+    public_key.verify(signed_content.as_bytes(), &sig).is_ok()
+}
 pub async fn find_auction_to_bid(
     mut auction_house: AuctionHouse,
     bid: &Bid,
-    transaction: &Transaction,
+    transaction: Transaction,
     socket: TcpStream,
     dest_ip: String,
 ) {
@@ -82,10 +117,15 @@ pub async fn find_auction_to_bid(
         .iter()
         .find(|auction| auction.auction_id == bid.auction_id)
     {
-        auction_house =
-            bid_handler(auction.clone(), auction_house.clone(), bid.clone(), socket).await;
-        let serialized = serde_json::to_string_pretty(&auction_house).unwrap();
-        fs::write("auction_data.json", serialized);
+        let signed_content =
+            digest(bid.auction_id.to_string() + &bid.bidder + &bid.amount.to_string());
+
+        if validate_tx_integrity(&signed_content, &bid.bidder, bid.signature.clone()).await {
+            auction_house =
+                bid_handler(auction.clone(), auction_house.clone(), bid.clone(), socket).await;
+            let serialized = serde_json::to_string_pretty(&auction_house).unwrap();
+            fs::write("auction_data.json", serialized).expect("error saving bid");
+        }
     } else {
         println!("Auction not present, sending to other peers");
         //

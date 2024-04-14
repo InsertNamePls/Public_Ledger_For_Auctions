@@ -149,35 +149,36 @@ brew install protobuf
 ## Test Locally with docker
 1. Build the docker Image:
 ```bash 
-docker build . --tag dledger2auction
+docker build ./auctions_pub_ledger --tag dledger2auction
 ```
 
 2. Create Docker instance
 ```bash 
-docker run --name=server1 -dit dledger2auction && docker exec -it server1 bash
-docker run --name=server2 -dit dledger2auction && docker exec -it server2 bash
-docker run --name=auction1 -dit dledger2auction && docker exec -it auction1 bash
-docker run --name=auction2 -dit dledger2auction && docker exec -it auction2 bash
+docker compose up -d              
+
+
 ```
-3. build project in each node
+3. Access containers in individual bash window 
 ```bash
-cd home/auctions_pub_ledger/ && \
-cargo build
+docker exec -it public_ledger_for_auctions-server1-1 bash
+docker exec -it public_ledger_for_auctions-server2-1  bash
+docker exec -it public_ledger_for_auctions-auction1-1  bash
 ```
-4. In another bash window create instance for the miner (server1) 
+4. Execute init blockchain connand to start the server (public_ledger_for_auctions-server1-1) 
 ```bash
-cargo run --bin main -- init_blockchain 172.17.0.3
+cargo run --bin main -- init_blockchain 10.10.0.3
 ```
-5. In another bash window create instance for the miner (server2) 
+5. Execute join command on the remaining servers (public_ledger_for_auctions-server2-1) 
 ```bash
-cargo run --bin main -- join_blockchain 172.17.0.2
+cargo run --bin main -- join_blockchain 10.10.0.2
 ```
 6. Run auction nodes
 ```bash
-cargo run --bin auction -- 172.17.0.3,172.17.0.2
-cargo run --bin auction -- 172.17.0.2,172.17.0.3
+cargo run --bin auction -- 10.10.0.3,10.10.0.2
+cargo run --bin auction -- 10.10.0.2,10.10.0.3
 ```
-> The user must be registered: Select Register, enter a username, the public keys are located under /home/ssh_keys/idrsa.pub
+> The user must be registered: Select Register, enter a username
+
 ###### example:
 ```bash
 Welcome to the BidBuddie's Auction System!
@@ -187,13 +188,10 @@ Please select an option:
 2
 Please enter your Username:
 user1
-Enter the path to your SSH key:
-/home/ssh_keys/idrsa.pub
+
 ```
 #### Environment Cleanup 
+Delete all containers and docker images
 ```bash
-docker stop server1 server2 auction1 auction2 && docker rm server1 server2 auction1 auction2
-
-remove recent image
-docker image rm `docker images | grep dledger2auction | awk '{print $3}'`
+docker compose down --rmi  'all'
 ```
