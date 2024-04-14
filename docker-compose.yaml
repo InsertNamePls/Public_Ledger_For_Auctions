@@ -1,0 +1,45 @@
+version: "3.8"
+
+services:
+  server1:
+    image: dledger2auction
+    environment:
+      HOME: /home
+    networks:
+      vpcbr:
+        ipv4_address: 10.10.0.2
+    tty: true
+    #command: ["cargo build"]
+
+  server2:
+    image: dledger2auction
+    environment:
+      HOME: /home
+    networks:
+      vpcbr:
+        ipv4_address: 10.10.0.3
+    depends_on:
+      - server1
+    tty: true
+  #   #entrypoint:
+  # #  [
+  # #       "cd /home/ && cargo build && cargo run --bin main -- join_blockchain 10.10.0.2",
+  # #      ]
+  auction1:
+    image: dledger2auction
+    environment:
+      HOME: /home
+    networks:
+      vpcbr:
+        ipv4_address: 10.10.0.4
+    tty: true
+  #   #entrypoint:
+  #   #  ["cd /home/ && cargo build && cargo run --bin auction -- 10.10.0.3"]
+  #
+networks:
+  vpcbr:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.10.0.0/16
+          gateway: 10.10.0.1

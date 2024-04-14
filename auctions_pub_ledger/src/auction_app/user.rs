@@ -1,3 +1,4 @@
+use k256::PublicKey;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs::{self};
@@ -15,17 +16,15 @@ pub struct User {
     pub user_name: String,
     pub credits: f32,
     pub participated_auctions: HashMap<u32, Vec<AuctionActivity>>,
-    pub ssh_key_path: String,
 }
 
 impl User {
-    pub fn new(user_name: String, ssh_key_path: String, uid: String) -> Self {
+    pub fn new(user_name: String, uid: String) -> Self {
         User {
             uid,
             user_name,
             credits: 0.0,
             participated_auctions: HashMap::new(),
-            ssh_key_path,
         }
     }
 
@@ -72,7 +71,7 @@ impl User {
 
     pub fn provide_ssh_key(&self) -> std::io::Result<String> {
         // Reading the SSH public key from the provided path
-        let ssh_key = fs::read_to_string(&self.ssh_key_path)?;
+        let ssh_key = fs::read_to_string(&self.uid)?;
         Ok(ssh_key)
     }
 }

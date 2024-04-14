@@ -1,4 +1,8 @@
+use std::collections::HashMap;
+
 use crate::auction::{save_auction_data, AuctionHouse, Transaction};
+use ecdsa::signature::Signature;
+use ecdsa::SignatureBytes;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::TcpStream;
 
@@ -23,9 +27,10 @@ pub async fn request_auction_house(dest_addr: &Vec<String>) {
     }
 }
 
-pub async fn send_transaction(data: &Transaction, dest_addr: String) {
-    let data_str = serde_json::to_string(&data).unwrap();
+pub async fn send_transaction(data: Transaction, dest_addr: String) {
     if let Ok(mut stream) = TcpStream::connect(format!("{}:3000", dest_addr)).await {
+        let data_str = serde_json::to_string(&data).unwrap();
+
         if let Err(e) = stream.write_all(data_str.as_bytes()).await {
             eprintln!("error requesting data: {}", e);
         }
