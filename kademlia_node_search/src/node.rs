@@ -11,11 +11,10 @@ use crate::kademlia::kademlia_client::KademliaClient;
 use crate::kademlia::kademlia_server::{Kademlia, KademliaServer};
 use crate::kademlia::{NodeInfo as ProtoNodeInfo,PingRequest, PingResponse, StoreRequest, StoreResponse, FindNodeRequest, FindNodeResponse, FindValueRequest, FindValueResponse};
 use rand::RngCore;
-
-
-
+use tokio::time::{self, Duration};
 use self::routing_table::NodeInfo;
 
+const REFRESH_TIMER: u64 = 10;
 pub struct Node {
     id: Bytes,
     storage: Mutex<HashMap<Bytes, Bytes>>,
@@ -44,9 +43,8 @@ impl Node {
 
         if let Some(addr) = bootstrap_addr {
             println!(">Bootstrapping with node at address: {}", addr);
-            node.initialize_routing_table(addr).await?;
+            node.fetch_routing_table(addr).await?;
         };
-        node.routing_table.lock().await.print_table();
         Ok(node)
     }
 
@@ -58,7 +56,7 @@ impl Node {
     }
 
     
-    async fn initialize_routing_table(&self, bootstrap_addr: &str) -> Result<(), Box<dyn std::error::Error>> {
+    async fn fetch_routing_table(&self, bootstrap_addr: &str) -> Result<(), Box<dyn std::error::Error>> {
         // Connect to the bootstrap node
         let endpoint = Endpoint::from_shared(format!("http://{}", bootstrap_addr))?;
         let channel = endpoint.connect().await?;
@@ -89,6 +87,21 @@ impl Node {
         let mut routing_table = self.routing_table.lock().await;
         for node_info in nodes {
             routing_table.add_node(node_info, &self.id);
+        }
+    }
+
+    async fn refresh_routing_table(&self) {
+        let mut interval = time::interval(Duration::from_secs(60)); // Set refresh interval to 60 seconds
+        loop {
+            interval.tick().await;
+            let routing_table = self.routing_table.lock().await;
+            if let Some(node_info) = routing_table.random_node() {
+                println!("Refreshing routing table from node: {:?}", node_info.addr);
+                match self.fetch_routing_table(&node_info.addr.to_string()).await {
+                    Ok(_) => println!("Routing table refreshed successfully from {}", node_info.addr),
+                    Err(e) => eprintln!("Failed to refresh routing table from {}: {}", node_info.addr, e),
+                }
+            }
         }
     }
 }
@@ -165,15 +178,19 @@ impl Kademlia for Node {
 }
 
 
+
+
 pub async fn run_server(addr: &str, bootstrap_addr: Option<String>) -> Result<(), Box<dyn std::error::Error>> {
 
     let addr = addr.parse()?;
     let node = Node::new(addr,bootstrap_addr.as_deref()).await?;
 
-    if let Some(bootstrap) = bootstrap_addr {
-        // Connect to the bootstrap node and initialize routing table
-        node.initialize_routing_table(&bootstrap).await?;
-    }
+    node.routing_table.lock().await.print_table();
+
+    tokio::spawn(async move {
+        node.refresh_routing_table().await;  
+    });
+
 
     println!(">Server listening on {}", addr);
     //Start gRPC server
@@ -183,4 +200,5 @@ pub async fn run_server(addr: &str, bootstrap_addr: Option<String>) -> Result<()
         .await?;
 
     Ok(())
+
 }

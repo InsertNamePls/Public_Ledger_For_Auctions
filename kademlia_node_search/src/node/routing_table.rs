@@ -1,4 +1,5 @@
 use bytes::Bytes;
+use rand::seq::IteratorRandom;
 use std::collections::VecDeque;
 use std::net::SocketAddr;
 use crate::kademlia::NodeInfo as ProtoNodeInfo;
@@ -7,13 +8,13 @@ use crate::kademlia::NodeInfo as ProtoNodeInfo;
 const K: usize = 20; // The maximum number of nodes in a bucket
 const N_BITS: usize = 160; // The number of bits in the node ID
 
-#[derive(Clone)]
+#[derive(Clone,Debug)]
 pub struct NodeInfo {
     pub(crate) id: Bytes,
     pub(crate) addr: SocketAddr,
 }
 
-#[derive(Clone)]
+#[derive(Clone,Debug)]
 pub struct Bucket {
     nodes: VecDeque<NodeInfo>,
 }
@@ -33,6 +34,7 @@ impl Bucket {
     }
 }
 
+#[derive(Debug)]
 pub struct RoutingTable {
     buckets: Vec<Bucket>,
 }
@@ -79,18 +81,27 @@ impl RoutingTable {
         nodes
     }
 
+     pub fn random_node(&self) -> Option<&NodeInfo> {
+        self.buckets.iter()
+            .filter_map(|bucket| bucket.nodes.front())
+            .choose(&mut rand::thread_rng())  // Uses the `rand::seq::SliceRandom` trait
+    }
+
     pub fn print_table(&self) {
         let routing_table = &self.buckets;
         println!("Routing Table:");
+        println!("{:<10} | {:<64} | {:<30}", "Bucket", "Node ID", "Address");
+        println!("{:-<110}", "");  // Print a dividing line
+    
         for (i, bucket) in routing_table.iter().enumerate() {
             if !bucket.nodes.is_empty() {
-                println!("Bucket {}: ", i);
                 for node in &bucket.nodes {
-                    println!("\tNode ID: {:?}, Address: {}", node.id, node.addr);
+                    let node_id_hex = format!("{:x}", node.id);  // Convert Bytes to a hex string for better readability
+                    println!("{:<10} | {:<64} | {:<30}", i, node_id_hex, node.addr);
                 }
             }
         }
     }
-
+    
     
 }
