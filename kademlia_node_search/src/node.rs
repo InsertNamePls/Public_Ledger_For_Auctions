@@ -187,11 +187,6 @@ pub async fn run_server(addr: &str, bootstrap_addr: Option<String>) -> Result<()
 
     node.routing_table.lock().await.print_table();
 
-    tokio::spawn(async move {
-        node.refresh_routing_table().await;  
-    });
-
-
     println!(">Server listening on {}", addr);
     //Start gRPC server
     Server::builder()
