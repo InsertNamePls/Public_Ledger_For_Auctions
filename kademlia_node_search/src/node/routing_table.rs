@@ -9,8 +9,8 @@ const N_BITS: usize = 160; // The number of bits in the node ID
 
 #[derive(Clone)]
 pub struct NodeInfo {
-    id: Bytes,
-    addr: SocketAddr,
+    pub(crate) id: Bytes,
+    pub(crate) addr: SocketAddr,
 }
 
 #[derive(Clone)]
@@ -55,10 +55,19 @@ impl RoutingTable {
     }
 
     fn calculate_bucket_index(&self, id: &Bytes) -> usize {
-        let table_id = &self.buckets[0].nodes[0].id; // Assuming the first bucket and first node as the owner
-        let xor_distance = Self::xor_distance(id, table_id);
-        let leading_zeros = xor_distance.leading_zeros() as usize;
-        leading_zeros
+        if let Some(first_bucket) = self.buckets.first() {
+            if let Some(first_node) = first_bucket.nodes.front() {
+                let table_id = &first_node.id;
+                let xor_distance = Self::xor_distance(id, table_id);
+                xor_distance.leading_zeros() as usize
+            } else {
+                // Return a default or calculated bucket index if there are no nodes yet
+                0 // or some other logic
+            }
+        } else {
+            // No buckets scenario, which should not happen if buckets are initialized correctly
+            0 // or some other logic
+        }
     }
 
     fn xor_distance(id1: &Bytes, id2: &Bytes) -> u128 {
@@ -79,5 +88,19 @@ impl RoutingTable {
         }
         nodes
     }
+
+    pub fn print_table(&self) {
+        let routing_table = &self.buckets;
+        println!("Routing Table:");
+        for (i, bucket) in routing_table.iter().enumerate() {
+            if !bucket.nodes.is_empty() {
+                println!("Bucket {}: ", i);
+                for node in &bucket.nodes {
+                    println!("\tNode ID: {:?}, Address: {}", node.id, node.addr);
+                }
+            }
+        }
+    }
+
     
 }
