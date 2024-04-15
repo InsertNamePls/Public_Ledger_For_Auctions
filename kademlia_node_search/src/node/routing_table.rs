@@ -44,38 +44,28 @@ impl RoutingTable {
         }
     }
 
-    pub fn add_node(&mut self, node: NodeInfo) {
-        let bucket_index = self.calculate_bucket_index(&node.id);
-        self.buckets[bucket_index].add(node);
-    }
-
-    pub fn find_closest(&self, id: &Bytes) -> Vec<NodeInfo> {
-        let bucket_index = self.calculate_bucket_index(id);
-        self.buckets[bucket_index].nodes.iter().cloned().collect()
-    }
-
-    fn calculate_bucket_index(&self, id: &Bytes) -> usize {
-        if let Some(first_bucket) = self.buckets.first() {
-            if let Some(first_node) = first_bucket.nodes.front() {
-                let table_id = &first_node.id;
-                let xor_distance = Self::xor_distance(id, table_id);
-                xor_distance.leading_zeros() as usize
-            } else {
-                // Return a default or calculated bucket index if there are no nodes yet
-                0 // or some other logic
-            }
-        } else {
-            // No buckets scenario, which should not happen if buckets are initialized correctly
-            0 // or some other logic
-        }
+    // Add the node's own ID as a parameter for all necessary functions
+    fn calculate_bucket_index(&self, id: &Bytes, own_id: &Bytes) -> usize {
+        let xor_distance = Self::xor_distance(id, own_id);
+        xor_distance.leading_zeros() as usize % N_BITS
     }
 
     fn xor_distance(id1: &Bytes, id2: &Bytes) -> u128 {
         let mut result = 0;
         for (byte1, byte2) in id1.iter().zip(id2.iter()) {
-            result = (result << 8) | (byte1 ^ byte2) as u128;
+            result = (result << 8) | (*byte1 ^ *byte2) as u128;
         }
         result
+    }
+
+    pub fn add_node(&mut self, node: NodeInfo, own_id: &Bytes) {
+        let bucket_index = self.calculate_bucket_index(&node.id, own_id);
+        self.buckets[bucket_index].add(node);
+    }
+
+    pub fn find_closest(&self, id: &Bytes, own_id: &Bytes) -> Vec<NodeInfo> {
+        let bucket_index = self.calculate_bucket_index(id, own_id);
+        self.buckets[bucket_index].nodes.iter().cloned().collect()
     }
 
     pub fn from_proto_nodes(proto_nodes: Vec<ProtoNodeInfo>) -> Vec<NodeInfo> {
