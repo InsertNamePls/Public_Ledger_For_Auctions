@@ -2,6 +2,8 @@ mod routing_table;
 
 use std::collections::HashMap;
 use std::net::SocketAddr;
+use std::sync::Arc;
+use rand_distr::{Distribution, Uniform};
 use tokio::sync::Mutex;
 use bytes::Bytes;
 use routing_table::RoutingTable;
@@ -10,11 +12,15 @@ use tonic::{Request, Response, Status};
 use crate::kademlia::kademlia_client::KademliaClient;
 use crate::kademlia::kademlia_server::{Kademlia, KademliaServer};
 use crate::kademlia::{NodeInfo as ProtoNodeInfo,PingRequest, PingResponse, StoreRequest, StoreResponse, FindNodeRequest, FindNodeResponse, FindValueRequest, FindValueResponse};
-use rand::RngCore;
-use tokio::time::{self, Duration};
+use rand::{thread_rng, RngCore};
+use tokio::time::{self, Duration,timeout};
 use self::routing_table::NodeInfo;
+use rand_chacha::ChaChaRng;
+use rand::SeedableRng;
 
-const REFRESH_TIMER: u64 = 10;
+
+const REFRESH_TIMER_UPPER: u64 = 20;
+const REFRESH_TIMER_LOWER: u64 = 5;
 pub struct Node {
     id: Bytes,
     storage: Mutex<HashMap<Bytes, Bytes>>,
@@ -22,29 +28,37 @@ pub struct Node {
 }
 
 impl Node {
-    pub async fn new(addr: SocketAddr, bootstrap_addr: Option<&str>) -> Result<Self, Box<dyn std::error::Error>> {
+    pub async fn new(addr: SocketAddr, bootstrap_addr: Option<&str>) -> Result<Arc<Mutex<Self>>, Box<dyn std::error::Error>> {
         let node_id = Self::generate_id().await;
-        let mut routing_table = RoutingTable::new();
+        let routing_table = Mutex::new(RoutingTable::new());
 
-        println!(">Generated Node ID: {:?}", node_id);
+        println!("Generated node ID: {:?}", node_id);
+
+        // Create a node instance within an Arc<Mutex<>> wrapper
+        let node = Arc::new(Mutex::new(Node {
+            id: node_id.clone(),
+            storage: Mutex::new(HashMap::new()),
+            routing_table,
+        }));
 
         // Add self to routing table
-        let self_info = NodeInfo {
-            id: node_id.clone(),
-            addr,
-        };
-        routing_table.add_node(self_info, &node_id);
+        {
+            let node_lock = node.lock().await;
+            let mut routing_table = node_lock.routing_table.lock().await;
+            routing_table.add_node(NodeInfo {
+                id: node_id.clone(),
+                addr: addr,
+            }, &node_id);
+        }
 
-        let node = Node {
-            id: node_id,
-            storage: Mutex::new(HashMap::new()),
-            routing_table: Mutex::new(routing_table),
-        };
-
+        // Fetch the bootstrap node's routing table if provided
         if let Some(addr) = bootstrap_addr {
-            println!(">Bootstrapping with node at address: {}", addr);
-            node.fetch_routing_table(addr).await?;
-        };
+            println!("Fetching routing table from bootstrap node: {}", addr);
+            node.lock().await.fetch_routing_table(addr).await?;
+        }
+
+        node.lock().await.routing_table.lock().await.print_table();
+
         Ok(node)
     }
 
@@ -56,31 +70,40 @@ impl Node {
     }
 
     
+
     async fn fetch_routing_table(&self, bootstrap_addr: &str) -> Result<(), Box<dyn std::error::Error>> {
-        // Connect to the bootstrap node
         let endpoint = Endpoint::from_shared(format!("http://{}", bootstrap_addr))?;
         let channel = endpoint.connect().await?;
         let mut client = KademliaClient::new(channel);
-    
-        // Send a Ping request to get the bootstrap node's ID
-        let ping_request = Request::new(PingRequest {node_address: bootstrap_addr.to_string()});
-        println!("(REQUEST) --> Sending ping request to bootstrap node: {:?}", ping_request);
-        let ping_response = client.ping(ping_request).await?;
-        println!("(RESPONSE) --> Received ping response: {:?}", ping_response);
-        let bootstrap_id = ping_response.into_inner().node_id; 
-    
-        // Now use the bootstrap node's ID to send a FindNode request
-        let find_node_request = Request::new(FindNodeRequest {
-            target_node_id: bootstrap_id, // Use the received ID to search
-        });
-        println!("(REQUEST) --> Sending find_node request to bootstrap node: {:?}", find_node_request);
-        let response = client.find_node(find_node_request).await?;
-        println!("(RESPONSE) --> Received find_node response: {:?}", response);
-    
-        // Update local routing table based on response
-        self.update_routing_table(RoutingTable::from_proto_nodes(response.into_inner().nodes)).await;
-    
-        Ok(())
+        
+        for attempt in 0..3 {
+            println!("Attempt {} to fetch routing table from {}", attempt + 1, bootstrap_addr);
+            
+            let ping_request = Request::new(PingRequest { node_address: bootstrap_addr.to_string() });
+            match timeout(Duration::from_secs(3), client.ping(ping_request)).await {
+                Ok(Ok(response)) => {
+                    let ping_response = response.into_inner();
+                    println!("(RESPONSE) --> Received ping response: {:?}", ping_response);
+                    let find_node_request = Request::new(FindNodeRequest {
+                        target_node_id: ping_response.node_id,
+                    });
+
+                    match timeout(Duration::from_secs(3), client.find_node(find_node_request)).await {
+                        Ok(Ok(find_response)) => {
+                            println!("(RESPONSE) --> Received find_node response: {:?}", find_response);
+                            let response = find_response.into_inner();
+                            self.update_routing_table(RoutingTable::from_proto_nodes(response.nodes)).await;
+                            return Ok(());
+                        },
+                        Ok(Err(e)) => println!("Failed to receive find_node response: {}", e),
+                        Err(_) => println!("Timeout during find_node request"),
+                    }
+                },
+                Ok(Err(e)) => println!("Failed to receive ping response: {}", e),
+                Err(_) => println!("Timeout during ping request"),
+            }
+        }
+        Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, "Failed to fetch routing table after 3 attempts")))
     }
 
     async fn update_routing_table(&self, nodes: Vec<NodeInfo>) {
@@ -90,110 +113,110 @@ impl Node {
         }
     }
 
-    async fn refresh_routing_table(&self) {
-        let mut interval = time::interval(Duration::from_secs(60)); // Set refresh interval to 60 seconds
+    async fn refresh_routing_table(node: Arc<Mutex<Node>>) {
+        let interval_range = Uniform::from(REFRESH_TIMER_LOWER..REFRESH_TIMER_UPPER);
+        let mut rng = rand_chacha::ChaChaRng::from_entropy(); // RNG should be outside the loop to preserve state and performance
+    
         loop {
-            interval.tick().await;
-            let routing_table = self.routing_table.lock().await;
-            if let Some(node_info) = routing_table.random_node() {
+            let sleep_time = interval_range.sample(&mut rng);
+            println!("Fetching routing table in {} seconds", sleep_time);
+            tokio::time::sleep(Duration::from_secs(sleep_time)).await;
+    
+            // Lock only when needed and scope the lock to minimize blocking
+            let maybe_node_info = {
+                let node_lock = node.lock().await;
+                let routing_table = node_lock.routing_table.lock().await;
+                routing_table.random_node().cloned() // Clone the data to use outside the lock
+            };
+    
+            if let Some(node_info) = maybe_node_info {
                 println!("Refreshing routing table from node: {:?}", node_info.addr);
-                match self.fetch_routing_table(&node_info.addr.to_string()).await {
+                // Fetch the routing table outside of the node locks
+                let result = {
+                    let node_lock = node.lock().await;
+                    node_lock.fetch_routing_table(&node_info.addr.to_string()).await
+                };
+    
+                match result {
                     Ok(_) => println!("Routing table refreshed successfully from {}", node_info.addr),
                     Err(e) => eprintln!("Failed to refresh routing table from {}: {}", node_info.addr, e),
                 }
             }
         }
     }
+
 }
 
 #[tonic::async_trait]
-impl Kademlia for Node {
+impl Kademlia for Arc<Mutex<Node>> {
     async fn ping(&self, request: Request<PingRequest>) -> Result<Response<PingResponse>, Status> {
+        let node = self.lock().await;
         println!("(REQUEST) --> Received ping request: {:?}", request);
         let response = PingResponse {
             is_online: true,
-            node_id: self.id.clone().to_vec(),  // Convert Bytes to Vec<u8>
+            node_id: node.id.clone().to_vec(), // Ensure proper Bytes to Vec<u8> conversion
         };
         Ok(Response::new(response))
     }
 
     async fn store(&self, request: Request<StoreRequest>) -> Result<Response<StoreResponse>, Status> {
+        let node = self.lock().await;
         println!("(REQUEST) --> Received store request: {:?}", request);
         let store_request = request.into_inner();
         let key = Bytes::from(store_request.key);
         let value = Bytes::from(store_request.value);
     
-        let mut storage = self.storage.lock().await;
+        let mut storage = node.storage.lock().await;
         // Insert the key-value pair into the local storage.
         storage.insert(key, value);
     
-        // For now, we simply acknowledge the store operation succeeded without distributing it.
+        // Acknowledge that the store operation succeeded.
         Ok(Response::new(StoreResponse { success: true }))
     }
 
-  async fn find_node(&self, request: Request<FindNodeRequest>) -> Result<Response<FindNodeResponse>, Status> {
+    async fn find_node(&self, request: Request<FindNodeRequest>) -> Result<Response<FindNodeResponse>, Status> {
+        let node = self.lock().await;
         println!("(REQUEST) --> Received find_node request: {:?}", request);
         let target_id = Bytes::from(request.into_inner().target_node_id);
-
-        // Debug: Log the target ID
-        println!(">FindNode request for ID: {:?}", target_id);
-
+    
         // Retrieve the closest nodes from the routing table
         let closest_nodes = {
-            let routing_table = self.routing_table.lock().await;
-            routing_table.find_closest(&target_id, &self.id)
+            let routing_table = node.routing_table.lock().await;
+            routing_table.find_closest(&target_id, &node.id)
         };
-
-        // Debug: Log the found nodes
-           if closest_nodes.is_empty() {
-            println!(">No closest nodes found.");
-        } else {
-            for node in &closest_nodes {
-                println!("  >Closest node found: ID = {:?}, Addr = {}", node.id, node.addr);
-            }
-        }
-        
-
-        // Convert NodeInfo to the appropriate response format, assuming a conversion method exists
-        let proto_nodes = closest_nodes.iter().map(|node_info| {
-            ProtoNodeInfo {
-                id: node_info.id.clone().to_vec(), // Make sure this conversion is appropriate
-                address: node_info.addr.to_string(), // Convert SocketAddr to string
-            }
+    
+        // Log the found nodes and prepare the response
+        let proto_nodes = closest_nodes.iter().map(|node_info| ProtoNodeInfo {
+            id: node_info.id.clone().to_vec(),
+            address: node_info.addr.to_string(),
         }).collect::<Vec<_>>();
 
-        // Prepare the response
-        let response = FindNodeResponse {
-            nodes: proto_nodes,
-        };
-
-        Ok(Response::new(response))
+        Ok(Response::new(FindNodeResponse { nodes: proto_nodes }))
     }
 
     async fn find_value(&self, request: Request<FindValueRequest>) -> Result<Response<FindValueResponse>, Status> {
+        let node = self.lock().await;
         println!("(REQUEST) --> Received find_value request: {:?}", request);
-        // Implement FIND_VALUE logic here
-        unimplemented!()
+        let find_value_request = request.into_inner();
+        let key = Bytes::from(find_value_request.key);
+    
+        unimplemented!();
     }
 }
 
 
-
-
 pub async fn run_server(addr: &str, bootstrap_addr: Option<String>) -> Result<(), Box<dyn std::error::Error>> {
+    let addr = addr.parse::<SocketAddr>()?;
+    let node = Node::new(addr, bootstrap_addr.as_deref()).await?;
 
-    let addr = addr.parse()?;
-    let node = Node::new(addr,bootstrap_addr.as_deref()).await?;
+    let node_clone_for_server = Arc::clone(&node);
+    tokio::spawn(Node::refresh_routing_table(node_clone_for_server));
 
-    node.routing_table.lock().await.print_table();
-
-    println!(">Server listening on {}", addr);
-    //Start gRPC server
+    println!("Server listening on {}", addr);
     Server::builder()
-        .add_service(KademliaServer::new(node))
+        .add_service(KademliaServer::new(Arc::clone(&node)))
         .serve(addr)
         .await?;
 
     Ok(())
-
 }
