@@ -15,12 +15,18 @@ use crate::kademlia::{NodeInfo as ProtoNodeInfo,PingRequest, PingResponse, Store
 use rand::{thread_rng, RngCore};
 use tokio::time::{self, Duration,timeout};
 use self::routing_table::NodeInfo;
-use rand_chacha::ChaChaRng;
 use rand::SeedableRng;
 
 
+//Upper limit for random routing table refresh
 const REFRESH_TIMER_UPPER: u64 = 20;
+//Lower limit for random routing table refresh
 const REFRESH_TIMER_LOWER: u64 = 5;
+//Timeout for each request
+const TIMEOUT_TIMER: u64 = 3;
+//Maximum number of attempts for each request
+const TIMEOUT_MAX_ATTEMPTS: u64 = 3;
+
 pub struct Node {
     id: Bytes,
     storage: Mutex<HashMap<Bytes, Bytes>>,
@@ -76,11 +82,11 @@ impl Node {
         let channel = endpoint.connect().await?;
         let mut client = KademliaClient::new(channel);
         
-        for attempt in 0..3 {
+        for attempt in 0..TIMEOUT_MAX_ATTEMPTS {
             println!("Attempt {} to fetch routing table from {}", attempt + 1, bootstrap_addr);
             
             let ping_request = Request::new(PingRequest { node_address: bootstrap_addr.to_string() });
-            match timeout(Duration::from_secs(3), client.ping(ping_request)).await {
+            match timeout(Duration::from_secs(TIMEOUT_TIMER), client.ping(ping_request)).await {
                 Ok(Ok(response)) => {
                     let ping_response = response.into_inner();
                     println!("(RESPONSE) --> Received ping response: {:?}", ping_response);
@@ -88,7 +94,7 @@ impl Node {
                         target_node_id: ping_response.node_id,
                     });
 
-                    match timeout(Duration::from_secs(3), client.find_node(find_node_request)).await {
+                    match timeout(Duration::from_secs(TIMEOUT_TIMER), client.find_node(find_node_request)).await {
                         Ok(Ok(find_response)) => {
                             println!("(RESPONSE) --> Received find_node response: {:?}", find_response);
                             let response = find_response.into_inner();
