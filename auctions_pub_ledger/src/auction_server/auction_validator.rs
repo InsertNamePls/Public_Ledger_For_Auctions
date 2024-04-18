@@ -37,7 +37,7 @@ pub async fn auctions_validator(
                 tx.push(auction.signature.to_string());
 
                 auction.active = false;
-
+                println!("auction expired -> {:?}", auction);
                 byte_count += &auction.signature.as_bytes().len();
                 println!("{}", byte_count);
                 if byte_count >= 5 {
@@ -54,7 +54,6 @@ pub async fn auctions_validator(
                         blockchain_operator_validator(new_block.clone(), blockchain_vector.clone())
                             .await;
 
-                    // blockchain_vector = blockchain_vector_update;
                     tx = Vec::new();
                     byte_count = 0;
                     if result_validation && result_peer_validation {
@@ -64,13 +63,12 @@ pub async fn auctions_validator(
                         }
                     }
 
-                    //blockchain_vector = blockchain_handler(blockchain_vector.clone()).await;
                     blockchain_handler(blockchain_vector.clone()).await;
                 }
             }
         }
         let serialized = serde_json::to_string_pretty(&auction_house).unwrap();
-        fs::write("auction_data.json", serialized);
+        fs::write("auction_data.json", serialized).expect("error writing acution data");
         sleep(Duration::from_secs(10)).await;
     }
 }

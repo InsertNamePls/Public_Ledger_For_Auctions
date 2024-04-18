@@ -1,48 +1,59 @@
-use std::collections::HashMap;
-
 use crate::auction::{save_auction_data, AuctionHouse, Transaction};
-use ecdsa::signature::Signature;
-use ecdsa::SignatureBytes;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::TcpStream;
 
-pub async fn request_auction_house(dest_addr: &Vec<String>) {
-    for ip in dest_addr {
-        if let Ok(mut stream) = TcpStream::connect(format!("{}:3004", ip)).await {
-            if let Err(e) = stream.write_all("get_auction".as_bytes()).await {
-                eprintln!("error requesting data: {}", e);
-            }
-            let mut buffer = [0; 2048];
-            match stream.read(&mut buffer).await {
-                Ok(n) => {
-                    let result = String::from_utf8_lossy(&buffer[..n]);
-                    let auctions: AuctionHouse = serde_json::from_str(&result).unwrap();
-                    save_auction_data(&auctions, ip);
-                }
-                Err(e) => {
-                    eprintln!("error reading from server {}", e);
-                }
-            }
-        }
-    }
+pub mod auction_tx {
+    tonic::include_proto!("auction_tx");
 }
 
-pub async fn send_transaction(data: Transaction, dest_addr: String) {
-    if let Ok(mut stream) = TcpStream::connect(format!("{}:3000", dest_addr)).await {
-        let data_str = serde_json::to_string(&data).unwrap();
+use auction_tx::auction_tx_client::AuctionTxClient;
+use auction_tx::{GetAuctionsRequest, SubmitTransactionRequest};
+use tonic::transport::{Certificate, Channel, ClientTlsConfig};
 
-        if let Err(e) = stream.write_all(data_str.as_bytes()).await {
-            eprintln!("error requesting data: {}", e);
-        }
-        let mut buffer = [0; 2048];
-        match stream.read(&mut buffer).await {
-            Ok(n) => {
-                let result = String::from_utf8_lossy(&buffer[..n]);
-                println!("{}", result)
-            }
-            Err(e) => {
-                eprintln!("error reading from server {}", e);
-            }
-        }
+// GRPC auction client
+
+pub async fn run_client(
+    dest_addr: String,
+) -> Result<auction_tx::auction_tx_client::AuctionTxClient<Channel>, Box<dyn std::error::Error>> {
+    let ca = std::fs::read_to_string("tls/rootCA.crt")?;
+    let tls = ClientTlsConfig::new()
+        .ca_certificate(Certificate::from_pem(ca))
+        .domain_name("auctiondht.com");
+    let channel = Channel::builder(format!("https://{}:3000", dest_addr).parse().unwrap())
+        .tls_config(tls)
+        .unwrap()
+        .connect()
+        .await
+        .unwrap();
+
+    let client = AuctionTxClient::new(channel);
+
+    Ok(client)
+}
+pub async fn send_transaction(
+    data: Transaction,
+    dest_addr: String,
+) -> Result<String, Box<dyn std::error::Error>> {
+    let data_str = serde_json::to_string(&data).unwrap();
+    let mut client = run_client(dest_addr).await?;
+
+    let request = tonic::Request::new(SubmitTransactionRequest {
+        transaction: data_str,
+    });
+    let response = client.submit_transaction(request).await?;
+    //
+    Ok(response.into_inner().message)
+}
+
+pub async fn get_auction_house(peers: &Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
+    for peer in peers {
+        let mut client = run_client(peer.clone()).await?;
+
+        let request = tonic::Request::new(GetAuctionsRequest {});
+        let response = client.get_auctions(request).await?;
+        let auctions: AuctionHouse = serde_json::from_str(&response.into_inner().auctions).unwrap();
+
+        save_auction_data(&auctions, &peer.clone())?;
+        println!("GOT AUCTION FROM SERVER -> {:?} ", peer.clone());
     }
+    //
+    Ok(())
 }

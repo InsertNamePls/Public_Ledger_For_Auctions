@@ -79,7 +79,8 @@ pub fn save_auction_data(
     fs::write(
         format!("auctions/auction_data_{}.json", ip_addr),
         serialized,
-    );
+    )
+    .expect("error writing action data");
     Ok(())
 }
 

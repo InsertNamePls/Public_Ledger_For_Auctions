@@ -1,4 +1,3 @@
-use k256::PublicKey;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs::{self};
@@ -67,11 +66,5 @@ impl User {
                 println!("  Activity: {:?}", activity);
             }
         }
-    }
-
-    pub fn provide_ssh_key(&self) -> std::io::Result<String> {
-        // Reading the SSH public key from the provided path
-        let ssh_key = fs::read_to_string(&self.uid)?;
-        Ok(ssh_key)
     }
 }

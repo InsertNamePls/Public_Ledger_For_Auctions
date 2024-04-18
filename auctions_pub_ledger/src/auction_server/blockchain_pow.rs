@@ -1,8 +1,6 @@
-use crate::auction::get_files_in_directory;
 use crate::blockchain::{Block, Blockchain};
 use crate::blockchain_operator::{save_blockchain_locally, validator};
 use chrono::Utc;
-use std::fs;
 use std::sync::Arc;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
@@ -90,7 +88,6 @@ pub async fn blockchain_operator_validator(
     (result, update_active_blockchains)
 }
 pub async fn block_handler(
-    //mut active_blockchains: Vec<Blockchain>,
     mut active_blockchains: Vec<Blockchain>,
     block: Block,
 ) -> (bool, Vec<Blockchain>) {
@@ -177,23 +174,4 @@ pub async fn blockchain_store(blockchain_vector: Vec<Blockchain>, file_name_path
         )
         .await;
     }
-}
-
-pub async fn blockchain_vector_build() -> Vec<Blockchain> {
-    let mut blockchain_vector: Vec<Blockchain> = Vec::new();
-    let files = get_files_in_directory("blockchain_active");
-    match files {
-        Ok(blockchain_files) => {
-            for file in blockchain_files {
-                let data = fs::read_to_string(format!("blockchain_active/{}", file)).unwrap();
-                let blockchain: Blockchain =
-                    serde_json::from_str(&data).expect("Failed to deserialize JSON");
-                blockchain_vector.push(blockchain)
-            }
-        }
-        Err(_e) => {
-            println!("No active blockchains!");
-        }
-    }
-    blockchain_vector
 }

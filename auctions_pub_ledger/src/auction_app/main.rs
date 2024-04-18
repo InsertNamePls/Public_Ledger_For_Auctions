@@ -2,25 +2,22 @@ mod auction;
 mod user;
 use crate::auction::{list_auctions, Transaction};
 use crate::auction::{Auction, Bid};
-use auction_client::send_transaction;
+use auction_client::{get_auction_house, send_transaction};
 use chrono::Duration;
 use chrono::Utc;
-use ecdsa::SignatureBytes;
 use k256::ecdsa::SigningKey;
 use std::collections::HashMap;
 use std::env;
-use std::error::Error;
 use std::fs;
 use std::io::{self, Write};
 use user::User;
 mod auction_client;
-use crate::auction_client::request_auction_house;
 use sha256::digest;
 
 #[path = "../cryptography/ecdsa_keys.rs"]
 mod keys;
 use crate::keys::{generate_ecdsa_keypair, load_ecdsa_keys};
-use k256::ecdsa::{signature::Signer, Signature, VerifyingKey};
+use k256::ecdsa::{signature::Signer, Signature};
 #[cfg(not(target_os = "windows"))]
 fn clear_screen() {
     std::process::Command::new("clear").status().unwrap();
@@ -28,17 +25,8 @@ fn clear_screen() {
 
 #[tokio::main]
 async fn main() {
-    // Change this for a scrapping function later on
-    // let mut auction_house = match load_auction_data().await {
-    //     Ok(data) => data,
-    //     Err(_) => {
-    //         println!("error geting acoution house");
-    //         exit(0);
-    //     }
-    // };
     clear_screen();
     let args: Vec<String> = env::args().collect();
-    let ips = args[0].clone();
     println!("Welcome to the BidBuddie's Auction System!");
 
     println!("Please select an option:\n1. Login\n2. Register");
@@ -127,7 +115,7 @@ async fn register_user() -> User {
         .read_line(&mut username)
         .expect("Failed to read line");
 
-    let (private_key, public_key) = generate_ecdsa_keypair();
+    let (_, public_key) = generate_ecdsa_keypair();
     let user = User {
         uid: hex::encode(public_key.to_sec1_bytes()),
         user_name: username.trim().to_string(),
@@ -242,9 +230,12 @@ async fn add_credits(user: &mut User) {
 async fn join_auction(user: &mut User, dest_ip: &Vec<String>, private_key: SigningKey) {
     clear_screen();
 
-    request_auction_house(dest_ip).await;
+    get_auction_house(dest_ip)
+        .await
+        .expect("error geting acution from peers");
+
     list_auctions().await;
-    let mut auction_id = 0;
+    let auction_id;
     loop {
         println!("Enter the Auction ID you want to join (or 'exit' to cancel):");
         let mut auction_id_str = String::new();
@@ -292,7 +283,15 @@ async fn join_auction(user: &mut User, dest_ip: &Vec<String>, private_key: Signi
             signature: hex::encode(signature.to_bytes()),
         };
 
-        send_transaction(Transaction::Bid(bid.clone()), dest_ip[0].clone()).await;
+        //send_transaction(Transaction::Bid(bid.clone()), dest_ip[0].clone()).await;
+        match send_transaction(Transaction::Bid(bid.clone()), dest_ip[0].clone()).await {
+            Ok(result) => {
+                println!("Transaction generated -> {:?} ", result);
+            }
+            Err(e) => {
+                println!("error {}", e);
+            }
+        }
     } else {
         println!("Insufficient credits to place bid.");
     }
@@ -330,7 +329,10 @@ async fn create_auction(user: &User, dest_ip: &Vec<String>, private_key: Signing
         .expect("Please enter a valid number of days");
     let end_time = start_time + Duration::minutes(duration);
 
-    request_auction_house(dest_ip).await;
+    get_auction_house(dest_ip)
+        .await
+        .expect("error geting acution from peers");
+
     let auction_house = list_auctions().await;
 
     let signed_content = digest(
@@ -352,7 +354,14 @@ async fn create_auction(user: &User, dest_ip: &Vec<String>, private_key: Signing
         hex::encode(signature.to_bytes()),
     );
 
-    send_transaction(Transaction::Auction(auction.clone()), dest_ip[0].clone()).await;
+    match send_transaction(Transaction::Auction(auction.clone()), dest_ip[0].clone()).await {
+        Ok(result) => {
+            println!("Transaction generated -> {:?} ", result);
+        }
+        Err(e) => {
+            println!("error {}", e);
+        }
+    }
     //send_transaction(&Transaction::Auction(auction.clone()), dest_ip[0].clone()).await;
     println!("Auction created successfully!");
     pause();
@@ -363,7 +372,11 @@ async fn current_auctions(dest_ip: &Vec<String>) {
 
     println!("Active Auctions:");
 
-    request_auction_house(dest_ip).await;
+    //request_auction_house(dest_ip).await;
+
+    get_auction_house(dest_ip)
+        .await
+        .expect("error geting acution from peers");
 
     list_auctions().await;
     pause();
@@ -381,9 +394,4 @@ fn pause() {
     let mut pause = String::new();
     println!("\nPress Enter to continue...");
     io::stdin().read_line(&mut pause).unwrap();
-}
-
-fn gen_uid(ssh_key_path: &str, user_name: String) -> String {
-    let pub_key = fs::read_to_string(ssh_key_path).expect("Unable to read file");
-    digest(user_name + &pub_key)
 }
