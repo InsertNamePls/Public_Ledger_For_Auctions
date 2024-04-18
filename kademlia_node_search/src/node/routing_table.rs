@@ -1,5 +1,6 @@
 use bytes::Bytes;
 use rand::seq::IteratorRandom;
+use rand::thread_rng;
 use std::collections::VecDeque;
 use std::net::SocketAddr;
 use crate::kademlia::NodeInfo as ProtoNodeInfo;
@@ -37,14 +38,17 @@ impl Bucket {
 #[derive(Debug)]
 pub struct RoutingTable {
     buckets: Vec<Bucket>,
+    own_id: Bytes,  // Store the node's own ID for reference
 }
 
 impl RoutingTable {
-    pub fn new() -> Self {
+    pub fn new(own_id: Bytes) -> Self {
         Self {
             buckets: vec![Bucket::new(); N_BITS],
+            own_id,
         }
     }
+
 
     // Add the node's own ID as a parameter for all necessary functions
     fn calculate_bucket_index(&self, id: &Bytes, own_id: &Bytes) -> usize {
@@ -81,11 +85,13 @@ impl RoutingTable {
         nodes
     }
 
-     pub fn random_node(&self) -> Option<&NodeInfo> {
+    pub fn random_node(&self) -> Option<&NodeInfo> {
         self.buckets.iter()
-            .filter_map(|bucket| bucket.nodes.front())
-            .choose(&mut rand::thread_rng())  // Uses the `rand::seq::SliceRandom` trait
+            .flat_map(|bucket| &bucket.nodes) // Iterate over all nodes in all buckets
+            .filter(|node_info| node_info.id != self.own_id) // Exclude the node's own ID
+            .choose(&mut thread_rng())  // Randomly select one node
     }
+
 
     pub fn print_table(&self) {
         let routing_table = &self.buckets;

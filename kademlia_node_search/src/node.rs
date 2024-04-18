@@ -12,6 +12,7 @@ use tonic::{Request, Response, Status};
 use crate::kademlia::kademlia_client::KademliaClient;
 use crate::kademlia::kademlia_server::{Kademlia, KademliaServer};
 use crate::kademlia::{NodeInfo as ProtoNodeInfo,PingRequest, PingResponse, StoreRequest, StoreResponse, FindNodeRequest, FindNodeResponse, FindValueRequest, FindValueResponse};
+use crate::node;
 use rand::{thread_rng, RngCore};
 use tokio::time::{self, Duration,timeout};
 use self::routing_table::NodeInfo;
@@ -36,7 +37,7 @@ pub struct Node {
 impl Node {
     pub async fn new(addr: SocketAddr, bootstrap_addr: Option<&str>) -> Result<Arc<Mutex<Self>>, Box<dyn std::error::Error>> {
         let node_id = Self::generate_id().await;
-        let routing_table = Mutex::new(RoutingTable::new());
+        let routing_table = Mutex::new(RoutingTable::new(node_id.clone()));
 
         println!("Generated node ID: {:?}", node_id);
 
@@ -148,6 +149,10 @@ impl Node {
                     Err(e) => eprintln!("Failed to refresh routing table from {}: {}", node_info.addr, e),
                 }
             }
+            else {
+                eprintln!("No nodes available to refresh the routing table");
+            }
+            node.lock().await.routing_table.lock().await.print_table();
         }
     }
 
