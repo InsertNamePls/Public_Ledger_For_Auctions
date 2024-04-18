@@ -5,6 +5,7 @@ services:
     image: dledger2auction
     environment:
       HOME: /home
+      NGH_ADDR: 10.10.0.3
     networks:
       vpcbr:
         ipv4_address: 10.10.0.2
@@ -15,6 +16,7 @@ services:
     image: dledger2auction
     environment:
       HOME: /home
+      NGH_ADDR: 10.10.0.2
     networks:
       vpcbr:
         ipv4_address: 10.10.0.3
@@ -32,6 +34,14 @@ services:
     networks:
       vpcbr:
         ipv4_address: 10.10.0.4
+    tty: true
+  auction2:
+    image: dledger2auction
+    environment:
+      HOME: /home
+    networks:
+      vpcbr:
+        ipv4_address: 10.10.0.5
     tty: true
   #   #entrypoint:
   #   #  ["cd /home/ && cargo build && cargo run --bin auction -- 10.10.0.3"]

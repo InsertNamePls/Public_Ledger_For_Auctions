@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package auction_tx;
+
+service Auction_Tx {
+  rpc SubmitTransaction(SubmitTransactionRequest)
+      returns (SubmitTransactionResponse) {}
+  rpc GetAuctions(GetAuctionsRequest) returns (GetAuctionsResponse) {}
+  // rpc SubmitAuction(AuctionSubmitRequest) returns (AuctionSubmitResponse) {}
+  // rpc SubmitBid(BidRequest) returns (BidResponse) {}
+}
+
+message SubmitTransactionRequest { string transaction = 1; }
+message SubmitTransactionResponse { string message = 1; }
+message GetAuctionsRequest {}
+message GetAuctionsResponse { string auctions = 1; }
+//
+// message BidSubmitRequest {
+//   bytes transaction = 1;
+//   string adress = 2;
+// }
+// message BidSubmitResponse { string message = 1; }

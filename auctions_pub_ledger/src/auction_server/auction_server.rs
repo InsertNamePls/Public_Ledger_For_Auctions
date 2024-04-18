@@ -1,89 +1,37 @@
 use super::auction::*;
 use crate::auction_client::send_transaction;
 use chrono::Utc;
+use elliptic_curve::generic_array::GenericArray;
 use k256::ecdsa::Signature;
 use k256::ecdsa::{signature::Verifier, VerifyingKey};
-use std::fs;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::{TcpListener, TcpStream};
-
-use elliptic_curve::generic_array::GenericArray;
 use sha256::digest;
-pub async fn retrieve_auction_house() {
-    let listener = TcpListener::bind("0.0.0.0:3004").await.unwrap();
+use std::env;
+use std::fs;
 
-    while let Ok((mut socket, _)) = listener.accept().await {
-        let local_auction_house =
-            fs::read_to_string("auction_data.json").expect("Unable to read file");
-
-        let mut buffer = [0; 2048];
-        match socket.read(&mut buffer).await {
-            Ok(0) => break,
-            Ok(_n) => {
-                if let Err(e) = socket.write_all(local_auction_house.as_bytes()).await {
-                    eprintln!("error sending data: {}", e);
-                }
-            }
-            Err(e) => {
-                eprintln!("Error reading from buffer: {}", e);
-            }
+pub async fn transaction_handler(tx: String) {
+    let transaction: Transaction = serde_json::from_str(&tx).unwrap();
+    let data = fs::read_to_string("auction_data.json").expect("Unable to read file");
+    let mut auction_house: AuctionHouse =
+        serde_json::from_str(&data).expect("Failed to deserialize JSON");
+    match transaction {
+        Transaction::Bid(ref value) => {
+            println!("\n{:?}", value);
+            find_auction_to_bid(auction_house.clone(), &value, transaction.clone()).await;
         }
-    }
-}
+        Transaction::Auction(value) => {
+            println!("\n{:?}", auction_house);
 
-pub async fn auction_server(dest_ip: String) {
-    let listener = TcpListener::bind(format!("{}:3000", "0.0.0.0".to_string()))
-        .await
-        .unwrap();
-    while let Ok((mut socket, _)) = listener.accept().await {
-        let mut buffer = [0; 2048];
-        match socket.read(&mut buffer).await {
-            Ok(0) => break,
-            Ok(n) => {
-                let request = String::from_utf8_lossy(&buffer[..n]);
-                let transaction: Transaction = serde_json::from_str(&request).unwrap();
-                let data = fs::read_to_string("auction_data.json").expect("Unable to read file");
-                let mut auction_house: AuctionHouse =
-                    serde_json::from_str(&data).expect("Failed to deserialize JSON");
-                match transaction {
-                    Transaction::Bid(ref value) => {
-                        println!("\n{:?}", value);
-                        find_auction_to_bid(
-                            auction_house.clone(),
-                            &value,
-                            transaction.clone(),
-                            socket,
-                            dest_ip.clone(),
-                        )
-                        .await;
-                    }
-                    Transaction::Auction(value) => {
-                        println!("\n{:?}", auction_house);
-
-                        let signed_content = digest(
-                            value.auction_id.to_string()
-                                + &value.item_name
-                                + &value.starting_bid.to_string()
-                                + &value.user_id.to_string(),
-                        );
-                        if validate_tx_integrity(
-                            &signed_content,
-                            &value.user_id,
-                            value.signature.clone(),
-                        )
-                        .await
-                        {
-                            auction_house.add_auction(value);
-                            let serialized = serde_json::to_string_pretty(&auction_house).unwrap();
-                            fs::write("auction_data.json", serialized)
-                                .expect("error saving auction");
-                        }
-                    }
-                }
-                println!("{:?}", auction_house);
-            }
-            Err(e) => {
-                eprintln!("Error reading from buffer: {}", e);
+            let signed_content = digest(
+                value.auction_id.to_string()
+                    + &value.item_name
+                    + &value.starting_bid.to_string()
+                    + &value.user_id.to_string(),
+            );
+            if validate_tx_integrity(&signed_content, &value.user_id, value.signature.clone()).await
+            {
+                auction_house.add_auction(value);
+                let serialized = serde_json::to_string_pretty(&auction_house).unwrap();
+                fs::write("auction_data.json", serialized).expect("error saving auction");
             }
         }
     }
@@ -105,12 +53,11 @@ pub async fn validate_tx_integrity(
     // validate signature with the concat of parameters
     public_key.verify(signed_content.as_bytes(), &sig).is_ok()
 }
+
 pub async fn find_auction_to_bid(
     mut auction_house: AuctionHouse,
     bid: &Bid,
     transaction: Transaction,
-    socket: TcpStream,
-    dest_ip: String,
 ) {
     if let Some(auction) = auction_house
         .auctions
@@ -119,25 +66,34 @@ pub async fn find_auction_to_bid(
     {
         let signed_content =
             digest(bid.auction_id.to_string() + &bid.bidder + &bid.amount.to_string());
+        println!("{:?}\n", signed_content);
+        println!("{:?}\n", bid.signature.clone());
 
         if validate_tx_integrity(&signed_content, &bid.bidder, bid.signature.clone()).await {
-            auction_house =
-                bid_handler(auction.clone(), auction_house.clone(), bid.clone(), socket).await;
+            auction_house = bid_handler(auction.clone(), auction_house.clone(), bid.clone()).await;
             let serialized = serde_json::to_string_pretty(&auction_house).unwrap();
             fs::write("auction_data.json", serialized).expect("error saving bid");
         }
     } else {
         println!("Auction not present, sending to other peers");
         //
-        send_transaction(transaction, dest_ip).await;
+        let dest_ip = env::var("NGH_ADDR").unwrap();
+        println!("{:?}", dest_ip);
+        match send_transaction(transaction, dest_ip).await {
+            Ok(result) => {
+                println!("Transaction generated -> {:?} ", result);
+            }
+            Err(e) => {
+                println!("error {}", e);
+            }
+        }
     }
 }
 
 pub async fn bid_handler(
-    mut target_auction: Auction,
+    target_auction: Auction,
     mut auction_house: AuctionHouse,
     bid: Bid,
-    mut socket: TcpStream,
 ) -> AuctionHouse {
     let mut last_highest_bid = 0.0;
     if !target_auction.bids.is_empty() {
@@ -156,16 +112,68 @@ pub async fn bid_handler(
             .push(bid);
 
         let serialized = serde_json::to_string_pretty(&auction_house).unwrap();
-        fs::write("auction_data.json", serialized);
+        fs::write("auction_data.json", serialized).expect("error writing auction data");
         auction_house
     } else {
-        socket
-            .write_all(
-                "action not available or the bid value is lower than the last bid".as_bytes(),
-            )
-            .await
-            .expect("erro sending response");
-
         auction_house
     }
+}
+
+// GRPC auction server
+use auction_tx::auction_tx_server::AuctionTxServer;
+use auction_tx::{
+    GetAuctionsRequest, GetAuctionsResponse, SubmitTransactionRequest, SubmitTransactionResponse,
+};
+use tonic::{
+    transport::{Identity, Server, ServerTlsConfig},
+    Request, Response, Status,
+};
+pub mod auction_tx {
+    tonic::include_proto!("auction_tx");
+}
+
+type AuctionResult<T> = Result<Response<T>, Status>;
+
+#[derive(Default)]
+pub struct AuctionsTxServer {}
+
+#[tonic::async_trait]
+impl auction_tx::auction_tx_server::AuctionTx for AuctionsTxServer {
+    async fn submit_transaction(
+        &self,
+        request: Request<SubmitTransactionRequest>,
+    ) -> AuctionResult<SubmitTransactionResponse> {
+        let message = request.into_inner().transaction;
+        transaction_handler(message.clone()).await;
+
+        Ok(Response::new(SubmitTransactionResponse { message }))
+    }
+    async fn get_auctions(
+        &self,
+        _: Request<GetAuctionsRequest>,
+    ) -> AuctionResult<GetAuctionsResponse> {
+        let local_auction_house =
+            fs::read_to_string("auction_data.json").expect("Unable to read file");
+        Ok(Response::new(GetAuctionsResponse {
+            auctions: local_auction_house,
+        }))
+    }
+}
+pub async fn auction_server() {
+    let cert = std::fs::read_to_string("tls/server.crt");
+    let key = std::fs::read_to_string("tls/server.key");
+
+    let identity = Identity::from_pem(cert.unwrap(), key.unwrap());
+
+    let addr = "0.0.0.0:3000".parse().unwrap();
+    let auction_svr = AuctionsTxServer::default();
+    //::default();
+    println!("Greet server listening on {}", addr);
+    Server::builder()
+        .tls_config(ServerTlsConfig::new().identity(identity))
+        .unwrap()
+        .add_service(AuctionTxServer::new(auction_svr))
+        .serve(addr)
+        .await
+        .expect("error building server");
 }

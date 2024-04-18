@@ -25,13 +25,10 @@ pub async fn block_generator(blockchain: Blockchain, tx: Vec<String>) -> Block {
 
     println!("generated_block -> {:?}\n", block);
     block
-
-    // if validate_block(&block, previous_block, DIFICULTY)
-    //    && block_peer_validator_client(block.clone(), dest_addr).await
 }
 
 // based on local blockchains validate if block is valid
-pub async fn validator(mut blockchain: Blockchain, block: Block) -> bool {
+pub async fn validator(blockchain: Blockchain, block: Block) -> bool {
     if validate_block(&block, blockchain.blocks.last().unwrap(), DIFICULTY) {
         true
     } else {
@@ -44,13 +41,11 @@ pub async fn retrieve_blockchain(share_blockchain_vector: Arc<Mutex<Vec<Blockcha
     let listener = TcpListener::bind("0.0.0.0:3002").await.unwrap();
 
     while let Ok((mut socket, _)) = listener.accept().await {
-        //let blochchain_vector: Vec<Blockchain> = blockchain_vector_build().await;
-
         let mut buffer = [0; 2048];
         match socket.read(&mut buffer).await {
             Ok(0) => break,
             Ok(_n) => {
-                let mut blockchain_vector = share_blockchain_vector.lock().await;
+                let blockchain_vector = share_blockchain_vector.lock().await;
                 for blockchain in blockchain_vector.clone() {
                     println!("\nBlochchain sent: {:?}", blockchain);
                     let blockchain_str: String =
