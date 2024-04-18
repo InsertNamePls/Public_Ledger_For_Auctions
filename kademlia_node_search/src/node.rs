@@ -17,6 +17,7 @@ use rand::{thread_rng, RngCore};
 use tokio::time::{self, Duration,timeout};
 use self::routing_table::NodeInfo;
 use rand::SeedableRng;
+use colored::*; 
 
 
 //Upper limit for random routing table refresh
@@ -39,7 +40,7 @@ impl Node {
         let node_id = Self::generate_id().await;
         let routing_table = Mutex::new(RoutingTable::new(node_id.clone()));
 
-        println!(">Generated node ID: {:?}", node_id);
+        println!("{:?}", format!("Generated node ID: {:?}", node_id).green().bold());
 
         // Create a node instance within an Arc<Mutex<>> wrapper
         let node = Arc::new(Mutex::new(Node {
@@ -60,7 +61,7 @@ impl Node {
 
         // Fetch the bootstrap node's routing table if provided
         if let Some(addr) = bootstrap_addr {
-            println!(">Fetching routing table from bootstrap node: {}", addr);
+            println!("{}", format!("Fetching routing table from bootstrap node: {}", addr).blue());
             node.lock().await.fetch_routing_table(addr).await?;
         }
 
@@ -84,30 +85,30 @@ impl Node {
         let mut client = KademliaClient::new(channel);
         
         for attempt in 0..TIMEOUT_MAX_ATTEMPTS {
-            println!(">Attempt {} to fetch routing table from {}", attempt + 1, bootstrap_addr);
+            println!("{}", format!("Attempt {} to fetch routing table from {}", attempt + 1, bootstrap_addr).yellow());
             
             let ping_request = Request::new(PingRequest { node_address: bootstrap_addr.to_string() });
             match timeout(Duration::from_secs(TIMEOUT_TIMER), client.ping(ping_request)).await {
                 Ok(Ok(response)) => {
                     let ping_response = response.into_inner();
-                    println!("(RESPONSE) --> Received ping response: {:?}", ping_response);
+                    println!("{}", format!("Received ping response: {:?}", ping_response).green());
                     let find_node_request = Request::new(FindNodeRequest {
                         target_node_id: ping_response.node_id,
                     });
 
                     match timeout(Duration::from_secs(TIMEOUT_TIMER), client.find_node(find_node_request)).await {
                         Ok(Ok(find_response)) => {
-                            println!("(RESPONSE) --> Received find_node response: {:?}", find_response);
+                            println!("{}", format!("Received find_node response: {:?}", find_response).green());
                             let response = find_response.into_inner();
                             self.update_routing_table(RoutingTable::from_proto_nodes(response.nodes)).await;
                             return Ok(());
                         },
-                        Ok(Err(e)) => eprintln!("Failed to receive find_node response: {}", e),
-                        Err(_) => eprintln!("Timeout during find_node request"),
+                        Ok(Err(e)) => eprintln!("{}", format!("Failed to receive find_node response: {}", e).red()),
+                        Err(_) => eprintln!("{}", "Timeout during find_node request".red()),
                     }
                 },
-                Ok(Err(e)) => eprintln!("Failed to receive ping response: {}", e),
-                Err(_) => eprintln!("Timeout during ping request"),
+                Ok(Err(e)) => eprintln!("{}", format!("Failed to receive ping response: {}", e).red()),
+                Err(_) => eprintln!("{}", "Timeout during ping request".red()),
             }
         }
         Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, "Failed to fetch routing table after 3 attempts")))
@@ -131,7 +132,7 @@ impl Node {
     
         loop {
             let sleep_time = interval_range.sample(&mut rng);
-            println!(">Fetching routing table in {} seconds", sleep_time);
+            println!("{}", format!("Fetching routing table in {} seconds", sleep_time).cyan());
             tokio::time::sleep(Duration::from_secs(sleep_time)).await;
     
             // Lock only when needed and scope the lock to minimize blocking
@@ -142,7 +143,7 @@ impl Node {
             };
     
             if let Some(node_info) = maybe_node_info {
-                println!(">Refreshing routing table from node: {:?}", node_info.addr);
+                println!("{}", format!("Refreshing routing table from node: {:?}", node_info.addr).cyan());
                 // Fetch the routing table outside of the node locks
                 let result = {
                     let node_lock = node.lock().await;
@@ -150,12 +151,12 @@ impl Node {
                 };
     
                 match result {
-                    Ok(_) => println!("Routing table refreshed successfully from {}", node_info.addr),
-                    Err(e) => eprintln!("Failed to refresh routing table from {}: {}", node_info.addr, e),
+                    Ok(_) => println!("{}", format!("Routing table refreshed successfully from {}", node_info.addr).green()),
+                    Err(e) => eprintln!("{}", format!("Failed to refresh routing table from {}: {}", node_info.addr, e).red()),
                 }
             }
             else {
-                eprintln!("No nodes available to refresh the routing table");
+                eprintln!("{}", "No nodes available to refresh the routing table".yellow());
             }
             node.lock().await.routing_table.lock().await.print_table();
         }
@@ -167,7 +168,7 @@ impl Node {
 impl Kademlia for Arc<Mutex<Node>> {
     async fn ping(&self, request: Request<PingRequest>) -> Result<Response<PingResponse>, Status> {
         let node = self.lock().await;
-        println!("(REQUEST) --> Received ping request: {:?}", request);
+        println!("{}", format!("Received ping request: {:?}", request).blue());
         let response = PingResponse {
             is_online: true,
             node_id: node.id.clone().to_vec(), // Ensure proper Bytes to Vec<u8> conversion
@@ -177,7 +178,7 @@ impl Kademlia for Arc<Mutex<Node>> {
 
     async fn store(&self, request: Request<StoreRequest>) -> Result<Response<StoreResponse>, Status> {
         let node = self.lock().await;
-        println!("(REQUEST) --> Received store request: {:?}", request);
+        println!("{}", format!("Received store request: {:?}", request).blue());
         let store_request = request.into_inner();
         let key = Bytes::from(store_request.key);
         let value = Bytes::from(store_request.value);
@@ -192,7 +193,7 @@ impl Kademlia for Arc<Mutex<Node>> {
 
     async fn find_node(&self, request: Request<FindNodeRequest>) -> Result<Response<FindNodeResponse>, Status> {
         let node = self.lock().await;
-        println!("(REQUEST) --> Received find_node request: {:?}", request);
+        println!("{}", format!("Received find_node request: {:?}", request).blue());
         let target_id = Bytes::from(request.into_inner().target_node_id);
     
         // Retrieve the closest nodes from the routing table
@@ -211,10 +212,11 @@ impl Kademlia for Arc<Mutex<Node>> {
     }
 
     async fn find_value(&self, request: Request<FindValueRequest>) -> Result<Response<FindValueResponse>, Status> {
-        let node = self.lock().await;
-        println!("(REQUEST) --> Received find_value request: {:?}", request);
+        let node: tokio::sync::MutexGuard<'_, Node> = self.lock().await;
+        println!("{}", format!("Received find_value request: {:?}", request).blue());
         let find_value_request = request.into_inner();
         let key = Bytes::from(find_value_request.key);
+        println!("{}", format!("Key requested: {:?}", key).yellow());
     
         unimplemented!();
     }
@@ -228,7 +230,7 @@ pub async fn run_server(addr: &str, bootstrap_addr: Option<String>) -> Result<()
     let node_clone_for_server = Arc::clone(&node);
     tokio::spawn(Node::refresh_routing_table(node_clone_for_server));
 
-    println!("Server listening on {}", addr);
+    println!("{}", format!("Server listening on {}", addr).green());
     Server::builder()
         .add_service(KademliaServer::new(Arc::clone(&node)))
         .serve(addr)
