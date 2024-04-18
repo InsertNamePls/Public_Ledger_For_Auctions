@@ -39,7 +39,7 @@ impl Node {
         let node_id = Self::generate_id().await;
         let routing_table = Mutex::new(RoutingTable::new(node_id.clone()));
 
-        println!("Generated node ID: {:?}", node_id);
+        println!(">Generated node ID: {:?}", node_id);
 
         // Create a node instance within an Arc<Mutex<>> wrapper
         let node = Arc::new(Mutex::new(Node {
@@ -60,7 +60,7 @@ impl Node {
 
         // Fetch the bootstrap node's routing table if provided
         if let Some(addr) = bootstrap_addr {
-            println!("Fetching routing table from bootstrap node: {}", addr);
+            println!(">Fetching routing table from bootstrap node: {}", addr);
             node.lock().await.fetch_routing_table(addr).await?;
         }
 
@@ -84,7 +84,7 @@ impl Node {
         let mut client = KademliaClient::new(channel);
         
         for attempt in 0..TIMEOUT_MAX_ATTEMPTS {
-            println!("Attempt {} to fetch routing table from {}", attempt + 1, bootstrap_addr);
+            println!(">Attempt {} to fetch routing table from {}", attempt + 1, bootstrap_addr);
             
             let ping_request = Request::new(PingRequest { node_address: bootstrap_addr.to_string() });
             match timeout(Duration::from_secs(TIMEOUT_TIMER), client.ping(ping_request)).await {
@@ -102,12 +102,12 @@ impl Node {
                             self.update_routing_table(RoutingTable::from_proto_nodes(response.nodes)).await;
                             return Ok(());
                         },
-                        Ok(Err(e)) => println!("Failed to receive find_node response: {}", e),
-                        Err(_) => println!("Timeout during find_node request"),
+                        Ok(Err(e)) => eprintln!("Failed to receive find_node response: {}", e),
+                        Err(_) => eprintln!("Timeout during find_node request"),
                     }
                 },
-                Ok(Err(e)) => println!("Failed to receive ping response: {}", e),
-                Err(_) => println!("Timeout during ping request"),
+                Ok(Err(e)) => eprintln!("Failed to receive ping response: {}", e),
+                Err(_) => eprintln!("Timeout during ping request"),
             }
         }
         Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, "Failed to fetch routing table after 3 attempts")))
@@ -115,9 +115,14 @@ impl Node {
 
     async fn update_routing_table(&self, nodes: Vec<NodeInfo>) {
         let mut routing_table = self.routing_table.lock().await;
-        for node_info in nodes {
-            routing_table.add_node(node_info, &self.id);
+        let mut _counter: i64 = 0;
+        for new_node in nodes {
+            if !routing_table.contains(&new_node.id) {
+                _counter += 1;
+                routing_table.add_node(new_node, &self.id);
+            }
         }
+        println!("Added {} new nodes to the routing table", _counter);
     }
 
     async fn refresh_routing_table(node: Arc<Mutex<Node>>) {
@@ -126,7 +131,7 @@ impl Node {
     
         loop {
             let sleep_time = interval_range.sample(&mut rng);
-            println!("Fetching routing table in {} seconds", sleep_time);
+            println!(">Fetching routing table in {} seconds", sleep_time);
             tokio::time::sleep(Duration::from_secs(sleep_time)).await;
     
             // Lock only when needed and scope the lock to minimize blocking
@@ -137,7 +142,7 @@ impl Node {
             };
     
             if let Some(node_info) = maybe_node_info {
-                println!("Refreshing routing table from node: {:?}", node_info.addr);
+                println!(">Refreshing routing table from node: {:?}", node_info.addr);
                 // Fetch the routing table outside of the node locks
                 let result = {
                     let node_lock = node.lock().await;

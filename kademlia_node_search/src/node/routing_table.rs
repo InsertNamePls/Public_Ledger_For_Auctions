@@ -92,6 +92,13 @@ impl RoutingTable {
             .choose(&mut thread_rng())  // Randomly select one node
     }
 
+    // Function to check if a node is already in the routing table
+    pub fn contains(&self, node_id: &Bytes) -> bool {
+        self.buckets.iter().any(|bucket| {
+            bucket.nodes.iter().any(|node_info| &node_info.id == node_id)
+        })
+    }
+
 
     pub fn print_table(&self) {
         let routing_table = &self.buckets;
