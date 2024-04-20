@@ -274,7 +274,6 @@ async fn join_auction(user: &mut User, dest_ip: &Vec<String>, private_key: Signi
 
     let signed_content = digest(auction_id.to_string() + &user.uid.clone() + &amount.to_string());
     let signature: Signature = private_key.sign(signed_content.as_bytes());
-    println!("{:?}", signature);
     if user.credits >= amount {
         let bid = Bid {
             auction_id,
@@ -283,7 +282,6 @@ async fn join_auction(user: &mut User, dest_ip: &Vec<String>, private_key: Signi
             signature: hex::encode(signature.to_bytes()),
         };
 
-        //send_transaction(Transaction::Bid(bid.clone()), dest_ip[0].clone()).await;
         match send_transaction(Transaction::Bid(bid.clone()), dest_ip[0].clone()).await {
             Ok(result) => {
                 println!("Transaction generated -> {:?} ", result);
@@ -334,6 +332,7 @@ async fn create_auction(user: &User, dest_ip: &Vec<String>, private_key: Signing
         .expect("error geting acution from peers");
 
     let auction_house = list_auctions().await;
+    println!("local auction house {:?}\n\n", auction_house.clone());
 
     let signed_content = digest(
         auction_house.auctions.len().to_string()
@@ -353,16 +352,11 @@ async fn create_auction(user: &User, dest_ip: &Vec<String>, private_key: Signing
         user.uid.clone(), // Pass the user's uid as the creator
         hex::encode(signature.to_bytes()),
     );
+    println!("{:?}", auction.clone());
 
-    match send_transaction(Transaction::Auction(auction.clone()), dest_ip[0].clone()).await {
-        Ok(result) => {
-            println!("Transaction generated -> {:?} ", result);
-        }
-        Err(e) => {
-            println!("error {}", e);
-        }
-    }
-    //send_transaction(&Transaction::Auction(auction.clone()), dest_ip[0].clone()).await;
+    send_transaction(Transaction::Auction(auction.clone()), dest_ip[0].clone())
+        .await
+        .expect("ERROR sending transaction");
     println!("Auction created successfully!");
     pause();
 }
@@ -372,11 +366,9 @@ async fn current_auctions(dest_ip: &Vec<String>) {
 
     println!("Active Auctions:");
 
-    //request_auction_house(dest_ip).await;
-
     get_auction_house(dest_ip)
         .await
-        .expect("error geting acution from peers");
+        .expect("error geting auction from peers");
 
     list_auctions().await;
     pause();

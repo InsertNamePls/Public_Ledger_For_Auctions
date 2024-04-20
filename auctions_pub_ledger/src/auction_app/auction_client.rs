@@ -1,4 +1,4 @@
-use crate::auction::{save_auction_data, AuctionHouse, Transaction};
+use crate::auction::{self, save_auction_data, Auction, AuctionHouse, Transaction};
 
 pub mod auction_tx {
     tonic::include_proto!("auction_tx");
@@ -39,7 +39,7 @@ pub async fn send_transaction(
         transaction: data_str,
     });
     let response = client.submit_transaction(request).await?;
-    //
+
     Ok(response.into_inner().message)
 }
 
@@ -49,10 +49,18 @@ pub async fn get_auction_house(peers: &Vec<String>) -> Result<(), Box<dyn std::e
 
         let request = tonic::Request::new(GetAuctionsRequest {});
         let response = client.get_auctions(request).await?;
-        let auctions: AuctionHouse = serde_json::from_str(&response.into_inner().auctions).unwrap();
 
-        save_auction_data(&auctions, &peer.clone())?;
-        println!("GOT AUCTION FROM SERVER -> {:?} ", peer.clone());
+        let mut auctionshouse: AuctionHouse = AuctionHouse::new();
+
+        let auctions_vector_str: Vec<String> =
+            serde_json::from_str(&response.into_inner().auctions)?;
+
+        for auction_str in auctions_vector_str {
+            let auction: Auction = serde_json::from_str(&auction_str).unwrap();
+
+            auctionshouse.auctions.push(auction);
+        }
+        save_auction_data(&auctionshouse, &peer.clone())?;
     }
     //
     Ok(())

@@ -2,96 +2,15 @@ use crate::blockchain::{Block, Blockchain};
 use crate::blockchain_operator::{save_blockchain_locally, validator};
 use chrono::Utc;
 use std::sync::Arc;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::{TcpListener, TcpStream};
 
 use tokio::sync::Mutex;
 
-pub async fn block_peer_validator_client(block: Block, dest_addr: String) -> bool {
-    let block_str = serde_json::to_string(&block).unwrap();
-    if let Ok(mut stream) = TcpStream::connect(format!("{}:3001", dest_addr)).await {
-        if let Err(e) = stream.write_all(block_str.as_bytes()).await {
-            eprintln!("error requesting data: {}", e);
-        }
-        let mut buffer = [0; 2048];
-        match stream.read(&mut buffer).await {
-            Ok(n) => {
-                let result = String::from_utf8_lossy(&buffer[..n]);
-                println!("\nresult validation from peed ->{}", result);
-                if result == "true" {
-                    true
-                } else {
-                    false
-                }
-            }
-            Err(e) => {
-                eprintln!("error reading from server {}", e);
-                false
-            }
-        }
-    } else {
-        eprintln!("error conneting to server");
-        false
-    }
-}
-
-pub async fn block_peer_validator_server(shared_blockchain_vector: Arc<Mutex<Vec<Blockchain>>>) {
-    let listener = TcpListener::bind("0.0.0.0:3001").await.unwrap();
-    while let Ok((mut socket, _)) = listener.accept().await {
-        let mut buffer = [0; 2048];
-
-        match socket.read(&mut buffer).await {
-            Ok(0) => break,
-            Ok(n) => {
-                let mut blockchain_vector = shared_blockchain_vector.lock().await;
-                let result = String::from_utf8_lossy(&buffer[..n]);
-                let incoming_block: Block =
-                    serde_json::from_str(&result).expect("Failed to deserialize JSON");
-                println!(
-                    "Incoming block from peer-> {:?} {:?}\n",
-                    socket.peer_addr().unwrap(),
-                    incoming_block
-                );
-
-                let (result, blockchain_vector_update) =
-                    blockchain_operator_validator(incoming_block, blockchain_vector.clone()).await;
-                blockchain_vector.clear();
-                if result {
-                    for bch in blockchain_vector_update {
-                        blockchain_vector.push(bch);
-                    }
-                }
-
-                if let Err(e) = socket.write_all(result.to_string().as_bytes()).await {
-                    eprintln!("error sending data: {}", e);
-                }
-            }
-            Err(e) => {
-                eprintln!("Error reading from buffer: {}", e);
-            }
-        }
-    }
-}
-
-pub async fn blockchain_operator_validator(
-    incoming_block: Block,
-    blockchain_vector: Vec<Blockchain>,
-) -> (bool, Vec<Blockchain>) {
-    let (result, update_active_blockchains) =
-        block_handler(blockchain_vector, incoming_block.clone()).await;
-    blockchain_store(
-        update_active_blockchains.clone(),
-        "blockchain_active/blockchain",
-    )
-    .await;
-
-    (result, update_active_blockchains)
-}
 pub async fn block_handler(
-    mut active_blockchains: Vec<Blockchain>,
+    shared_active_blockchains: &mut Arc<Mutex<Vec<Blockchain>>>,
     block: Block,
-) -> (bool, Vec<Blockchain>) {
+) -> bool {
     let mut validator_result = false;
+    let mut active_blockchains = shared_active_blockchains.lock().await;
     for (i, blockchain) in active_blockchains.clone().iter().enumerate() {
         if blockchain.blocks.last().unwrap().index == block.clone().index - 1 {
             println!("\nUsing main branch");
@@ -130,11 +49,13 @@ pub async fn block_handler(
             }
         }
     }
-    (validator_result, active_blockchains)
+    validator_result
 }
 
-pub async fn blockchain_handler(blockchain_vector: Vec<Blockchain>) -> Vec<Blockchain> {
+pub async fn blockchain_handler(shared_blockchain_vector: &mut Arc<Mutex<Vec<Blockchain>>>) {
     let mut biggest_blockchain_len = 0;
+
+    let mut blockchain_vector = shared_blockchain_vector.lock().await;
     for blockchain in blockchain_vector.clone() {
         if blockchain.blocks.len() > biggest_blockchain_len {
             biggest_blockchain_len = blockchain.blocks.len()
@@ -144,26 +65,38 @@ pub async fn blockchain_handler(blockchain_vector: Vec<Blockchain>) -> Vec<Block
         "Biggest blockchain in the system has {:?} blocks",
         biggest_blockchain_len
     );
-
+    // create 2 vectors that one contains the active blockchains and the other that has the
+    // difference chain length > 2
     let (mut active_blockchains, archive_blockchains): (Vec<Blockchain>, Vec<Blockchain>) =
-        blockchain_vector.into_iter().partition(|blockchain| {
-            blockchain.blocks.len()
-                >= i32::abs(biggest_blockchain_len as i32 - 2)
-                    .abs()
-                    .try_into()
-                    .unwrap()
-        });
+        blockchain_vector
+            .clone()
+            .into_iter()
+            .partition(|blockchain| {
+                blockchain.blocks.len()
+                    >= i32::abs(biggest_blockchain_len as i32 - 2)
+                        .abs()
+                        .try_into()
+                        .unwrap()
+            });
+
     println!("\nActive blockchains: {:?} \n", active_blockchains);
 
-    let timestamp = Utc::now().timestamp_millis();
-    blockchain_store(
-        archive_blockchains,
-        format!("blockchain_archive/blockchain_{}", timestamp).as_str(),
-    )
-    .await;
-    active_blockchains.sort_by_key(|bch| bch.blocks.len());
-
-    active_blockchains
+    // if there are archivable blochains
+    if archive_blockchains.clone().len() > 0 {
+        // cleanup blockchains marked as archivable
+        for y in archive_blockchains.clone() {
+            blockchain_vector.retain(|blockchain| blockchain != &y);
+        }
+        blockchain_vector.sort_by_key(|bch| bch.blocks.len());
+        //save archive blockchain in a log file
+        let timestamp = Utc::now().timestamp_millis();
+        blockchain_store(
+            archive_blockchains.clone(),
+            format!("blockchain_archive/blockchain_{}", timestamp).as_str(),
+        )
+        .await;
+    }
+    blockchain_store(blockchain_vector.clone(), "blockchain_active/blockchain").await;
 }
 
 pub async fn blockchain_store(blockchain_vector: Vec<Blockchain>, file_name_path: &str) {
@@ -174,4 +107,28 @@ pub async fn blockchain_store(blockchain_vector: Vec<Blockchain>, file_name_path
         )
         .await;
     }
+}
+
+//POW grpc client
+//
+use blockchain_grpc::blockchain_grpc_client::BlockchainGrpcClient;
+use blockchain_grpc::ProofOfWorkRequest;
+
+pub mod blockchain_grpc {
+    tonic::include_proto!("blockchain_grpc");
+}
+
+pub async fn block_peer_validator_client(
+    block_to_validate: Block,
+    peer: String,
+) -> Result<bool, Box<dyn std::error::Error>> {
+    let mut client = BlockchainGrpcClient::connect(format!("http://{}:3001", peer)).await?;
+
+    let block = serde_json::to_string(&block_to_validate).unwrap();
+    let request = tonic::Request::new(ProofOfWorkRequest { block });
+    let response = client.proof_of_work(request).await?;
+
+    let block_validation: bool = response.into_inner().validation;
+
+    Ok(block_validation)
 }

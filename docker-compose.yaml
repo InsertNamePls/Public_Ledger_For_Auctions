@@ -31,6 +31,7 @@ services:
     image: dledger2auction
     environment:
       HOME: /home
+      NGH_ADDR: 10.10.0.2
     networks:
       vpcbr:
         ipv4_address: 10.10.0.4
@@ -39,6 +40,7 @@ services:
     image: dledger2auction
     environment:
       HOME: /home
+      NGH_ADDR: 10.10.0.3
     networks:
       vpcbr:
         ipv4_address: 10.10.0.5
