@@ -83,13 +83,6 @@ pub async fn find_auction_to_bid(
             digest(bid.auction_id.to_string() + &bid.bidder + &bid.amount.to_string());
 
         let mut last_highest_bid = 0.0;
-        println!("\ntarget auction {:?}", auction);
-        println!(
-            "\n auction bids size {:?}\n bids {:?}",
-            auction.clone().bids.len(),
-            auction.clone().bids
-        );
-
         if !auction.clone().bids.is_empty() {
             last_highest_bid = auction.clone().bids[auction.clone().bids.len() - 1].amount;
         }
@@ -97,10 +90,6 @@ pub async fn find_auction_to_bid(
         if &auction.clone().end_time > &Utc::now() && last_highest_bid < bid.amount {
             match validate_tx_integrity(&signed_content, &bid.bidder, bid.signature.clone()).await {
                 Ok(_True) => {
-                    // change this
-                    // important
-                    // lenth can be 0 and the id can be 1000000!!!!!!
-                    //
                     let target_auction_position = auction_house
                         .auctions
                         .iter()
@@ -150,8 +139,6 @@ impl auction_tx::auction_tx_server::AuctionTx for AuctionsTxServer {
         request: Request<SubmitTransactionRequest>,
     ) -> AuctionResult<SubmitTransactionResponse> {
         let message = request.into_inner().transaction;
-
-        //println!("{:?}", message.clone());
 
         transaction_handler(
             message.clone(),

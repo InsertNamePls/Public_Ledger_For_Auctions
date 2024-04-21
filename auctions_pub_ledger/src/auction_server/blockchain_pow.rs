@@ -67,7 +67,7 @@ pub async fn blockchain_handler(shared_blockchain_vector: &mut Arc<Mutex<Vec<Blo
     );
     // create 2 vectors that one contains the active blockchains and the other that has the
     // difference chain length > 2
-    let (mut active_blockchains, archive_blockchains): (Vec<Blockchain>, Vec<Blockchain>) =
+    let (active_blockchains, archive_blockchains): (Vec<Blockchain>, Vec<Blockchain>) =
         blockchain_vector
             .clone()
             .into_iter()
@@ -107,28 +107,4 @@ pub async fn blockchain_store(blockchain_vector: Vec<Blockchain>, file_name_path
         )
         .await;
     }
-}
-
-//POW grpc client
-//
-use blockchain_grpc::blockchain_grpc_client::BlockchainGrpcClient;
-use blockchain_grpc::ProofOfWorkRequest;
-
-pub mod blockchain_grpc {
-    tonic::include_proto!("blockchain_grpc");
-}
-
-pub async fn block_peer_validator_client(
-    block_to_validate: Block,
-    peer: String,
-) -> Result<bool, Box<dyn std::error::Error>> {
-    let mut client = BlockchainGrpcClient::connect(format!("http://{}:3001", peer)).await?;
-
-    let block = serde_json::to_string(&block_to_validate).unwrap();
-    let request = tonic::Request::new(ProofOfWorkRequest { block });
-    let response = client.proof_of_work(request).await?;
-
-    let block_validation: bool = response.into_inner().validation;
-
-    Ok(block_validation)
 }

@@ -1,7 +1,7 @@
 use super::auction::*;
 use crate::blockchain::Blockchain;
-use crate::blockchain_operator::block_generator;
-use crate::blockchain_pow::{block_handler, block_peer_validator_client, blockchain_handler};
+use crate::blockchain_operator::{block_generator, block_peer_validator_client};
+use crate::blockchain_pow::{block_handler, blockchain_handler};
 use chrono::Utc;
 use std::vec::Vec;
 

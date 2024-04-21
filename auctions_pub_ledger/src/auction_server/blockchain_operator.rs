@@ -1,4 +1,4 @@
-use crate::blockchain::{validate_block, Block, Blockchain};
+use crate::blockchain::{self, validate_block, Block, Blockchain};
 use chrono::Utc;
 use std::sync::Arc;
 use std::vec::Vec;
@@ -52,7 +52,12 @@ use blockchain_grpc::blockchain_grpc_server::BlockchainGrpcServer;
 use blockchain_grpc::{
     ProofOfWorkRequest, ProofOfWorkResponse, RetrieveBlockchainRequest, RetrieveBlockchainResponse,
 };
-use tonic::{transport::Server, Request, Response, Status};
+use tonic::transport::{Certificate, Channel, ClientTlsConfig};
+use tonic::{
+    transport::{Identity, Server, ServerTlsConfig},
+    Request, Response, Status,
+};
+
 #[derive(Default, Debug, Clone)]
 pub struct BlockchainServer {
     shared_blockchain_state: Arc<Mutex<Vec<Blockchain>>>,
@@ -92,9 +97,16 @@ impl BlockchainGrpc for BlockchainServer {
 
 // blockchain Server
 pub async fn blockchain_server(share_blockchain_vector: Arc<Mutex<Vec<Blockchain>>>) {
+    let cert = std::fs::read_to_string("tls/server.crt");
+    let key = std::fs::read_to_string("tls/server.key");
+
+    let identity = Identity::from_pem(cert.unwrap(), key.unwrap());
+
     let addr = "0.0.0.0:3001".parse().unwrap();
 
     Server::builder()
+        .tls_config(ServerTlsConfig::new().identity(identity))
+        .unwrap()
         .add_service(BlockchainGrpcServer::new(BlockchainServer {
             shared_blockchain_state: share_blockchain_vector,
         }))
@@ -103,10 +115,32 @@ pub async fn blockchain_server(share_blockchain_vector: Arc<Mutex<Vec<Blockchain
 }
 
 // blockchain client
+pub async fn blockchain_client(
+    peer: String,
+) -> Result<
+    blockchain_grpc::blockchain_grpc_client::BlockchainGrpcClient<Channel>,
+    Box<dyn std::error::Error>,
+> {
+    let ca = std::fs::read_to_string("tls/rootCA.crt")?;
+    let tls = ClientTlsConfig::new()
+        .ca_certificate(Certificate::from_pem(ca))
+        .domain_name("auctiondht.com");
+    let channel = Channel::builder(format!("https://{}:3001", peer).parse().unwrap())
+        .tls_config(tls)
+        .unwrap()
+        .connect()
+        .await
+        .unwrap();
+
+    let client = BlockchainGrpcClient::new(channel);
+
+    Ok(client)
+}
+
 pub async fn get_remote_blockchain(
     peer: String,
 ) -> Result<Vec<Blockchain>, Box<dyn std::error::Error>> {
-    let mut client = BlockchainGrpcClient::connect(format!("http://{}:3001", peer)).await?;
+    let mut client = blockchain_client(peer).await?;
     let request = tonic::Request::new(RetrieveBlockchainRequest {});
     let response = client.retrieve_blockchain(request).await?;
 
@@ -116,4 +150,20 @@ pub async fn get_remote_blockchain(
     blockchain_vector.push(main_blockchain);
 
     Ok(blockchain_vector)
+}
+
+// blockchain pow client
+pub async fn block_peer_validator_client(
+    block_to_validate: Block,
+    peer: String,
+) -> Result<bool, Box<dyn std::error::Error>> {
+    let mut client = blockchain_client(peer).await?;
+
+    let block = serde_json::to_string(&block_to_validate).unwrap();
+    let request = tonic::Request::new(ProofOfWorkRequest { block });
+    let response = client.proof_of_work(request).await?;
+
+    let block_validation: bool = response.into_inner().validation;
+
+    Ok(block_validation)
 }
