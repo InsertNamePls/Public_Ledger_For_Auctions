@@ -1,3 +1,4 @@
+use auction::AuctionHouse;
 use tokio::task;
 #[path = "auction_app/auction.rs"]
 mod auction;
@@ -9,7 +10,7 @@ mod auction_client;
 #[path = "auction_server/blockchain_operator.rs"]
 mod blockchain_operator;
 use crate::blockchain_operator::{
-    get_remote_blockchain, retrieve_blockchain, save_blockchain_locally,
+    blockchain_server, get_remote_blockchain, save_blockchain_locally,
 };
 #[path = "auction_server/auction_server.rs"]
 mod auction_server;
@@ -19,32 +20,36 @@ use crate::auction_validator::auctions_validator;
 #[path = "auction_server/blockchain_pow.rs"]
 mod blockchain_pow;
 use crate::auction_server::auction_server;
-use crate::blockchain_pow::block_peer_validator_server;
 use std::env;
+use std::fs;
 use std::sync::Arc;
 use std::vec::Vec;
 use tokio::sync::Mutex;
-
 #[path = "cryptography/ecdsa_keys.rs"]
 mod keys;
-//use crate::keys::ecdsa_keys;
 async fn destributed_auction_operator(blockchain_vector: Vec<Blockchain>, dest_ip: String) {
     let shared_blockchain_vector = Arc::new(Mutex::new(blockchain_vector));
 
-    let task1 = task::spawn(auction_server());
+    // initialize auction house by importing from file
+    let data = fs::read_to_string("auction_data.json").expect("Unable to read file");
+    let auction_house: AuctionHouse =
+        serde_json::from_str(&data).expect("Failed to deserialize JSON");
+
+    let share_auction_house = Arc::new(Mutex::new(auction_house));
+
+    let task1 = task::spawn(auction_server(share_auction_house.clone()));
     let task2 = task::spawn(auctions_validator(
         dest_ip.clone(),
         shared_blockchain_vector.clone(),
+        share_auction_house.clone(),
     ));
-    let task3 = task::spawn(retrieve_blockchain(shared_blockchain_vector.clone()));
-    let task5 = task::spawn(block_peer_validator_server(
-        shared_blockchain_vector.clone(),
-    ));
+    let task3 = task::spawn(blockchain_server(shared_blockchain_vector.clone()));
+
     task1.await.unwrap();
     task2.await.unwrap();
     task3.await.unwrap();
-    task5.await.unwrap();
 }
+
 #[tokio::main]
 async fn main() {
     let args: Vec<String> = env::args().collect();
@@ -59,10 +64,14 @@ async fn main() {
         save_blockchain_locally(&bchain, "blockchain_active/blockchain_0.json").await;
         destributed_auction_operator(blockchain_vector, dest_ip.clone()).await;
     } else {
-        let blockchain_vector: Vec<Blockchain> =
-            get_remote_blockchain(&args[2].to_string().clone()).await;
-        println!("{:?}", blockchain_vector);
-        //save_blockchain_locally(&bchain, "blockchain_active/blockchain0.json").await;
-        destributed_auction_operator(blockchain_vector, dest_ip.clone()).await;
+        match get_remote_blockchain(args[2].to_string().clone()).await {
+            Ok(result) => {
+                println!("{:?}", result);
+                destributed_auction_operator(result, dest_ip.clone()).await;
+            }
+            Err(e) => {
+                println!("error {}", e);
+            }
+        }
     }
 }

@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package blockchain_grpc;
+
+service BlockchainGrpc {
+  rpc RetrieveBlockchain(RetrieveBlockchainRequest)
+      returns (RetrieveBlockchainResponse) {}
+  rpc ProofOfWork(ProofOfWorkRequest) returns (ProofOfWorkResponse) {}
+}
+
+message RetrieveBlockchainRequest {}
+message RetrieveBlockchainResponse { string blockchain = 1; }
+
+message ProofOfWorkRequest { string block = 1; }
+message ProofOfWorkResponse { bool validation = 1; }

@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use sha256::digest;
 
 const DIFICULTY: usize = 4;
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Block {
     pub index: u32,
     pub prev_hash: String,
@@ -13,7 +13,7 @@ pub struct Block {
     pub tx: Vec<String>,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Blockchain {
     pub blocks: Vec<Block>,
 }
