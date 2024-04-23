@@ -93,6 +93,7 @@ impl Node {
                     let ping_response = response.into_inner();
                     println!("{}", format!("Received ping response: {:?}", ping_response).green());
                     let find_node_request = Request::new(FindNodeRequest {
+                        requester_node_id: self.id.to_vec(),
                         target_node_id: ping_response.node_id,
                     });
 

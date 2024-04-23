@@ -27,7 +27,8 @@ message StoreResponse {
 }
 
 message FindNodeRequest {
-    bytes targetNodeId = 1; // ID of the node being searched for
+    bytes requesterNodeId = 1; // ID of the node requesting
+    bytes targetNodeId = 2; // ID of the node being searched for
 }
 
 message FindNodeResponse {
