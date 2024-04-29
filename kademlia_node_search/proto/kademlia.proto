@@ -18,8 +18,8 @@ message PingResponse {
 }
 
 message StoreRequest {
-    string key = 1; // Key of the key-value pair
-    string value = 2; // Value of the key-value pair
+    bytes key = 1; // Key of the key-value pair
+    bytes value = 2; // Value of the key-value pair
 }
 
 message StoreResponse {

@@ -157,6 +157,7 @@ impl Node {
             node.lock().await.routing_table.lock().await.print_table();
         }
     }
+    
 
 }
 
@@ -175,22 +176,70 @@ impl Kademlia for Arc<Mutex<Node>> {
         Ok(Response::new(response))
     }
 
-    // The store method is used to store a key-value pair in the DHT.
+    // The store method is used to store a key-value pair across the entire network.
     async fn store(&self, request: Request<StoreRequest>) -> Result<Response<StoreResponse>, Status> {
         let node = self.lock().await;
         println!("{}", format!("Received store request: {:?}", request).blue());
+
         let store_request = request.into_inner();
-        let key = Bytes::from(store_request.key);
-        let value = Bytes::from(store_request.value);
-    
+        let key = Bytes::from(store_request.key.clone());  // Clone to use later for forwarding
+        let value = Bytes::from(store_request.value.clone());
+
+        // Access local storage to check for the key and possibly store it
         let mut storage = node.storage.lock().await;
-        // Insert the key-value pair into the local storage.
-        storage.insert(key, value);
-    
-        // Acknowledge that the store operation succeeded.
+        let should_forward = match storage.get(&key) {
+            Some(existing_value) if existing_value == &value => {
+                // If the key exists with the same value, do not forward
+                false
+            },
+            _ => {
+                // Insert the key-value pair into the local storage
+                storage.insert(key.clone(), value.clone());
+                let key_hex = format!("{:x}", key);
+                let value_hex = format!("{:x}",value);
+                println!("Added <key:value> to local storage: <{}:{}>",key_hex,value_hex);
+                true  // Forward the request as this is new or updated information
+            }
+        };
+
+
+        // Forward the store request to closest nodes only if it's new or updated information
+        if should_forward {
+            //print_storage(&node).await;
+            let closest_nodes = {
+                let routing_table = node.routing_table.lock().await;
+                routing_table.find_closest(&key)
+            };
+
+
+            // Use a lightweight task spawning to handle the requests asynchronously
+            for node_info in closest_nodes.iter() {
+                let client_addr = node_info.addr.to_string();
+                let forward_store_request = StoreRequest {
+                    key: store_request.key.clone(),
+                    value: store_request.value.clone(),
+                };
+
+                // Skip sending to self
+                if client_addr != node.addr.to_string() {
+                    tokio::spawn(async move {
+                        if let Ok(mut client) = KademliaClient::connect(format!("http://{}", client_addr)).await {
+                            let request: Request<StoreRequest> = Request::new(forward_store_request);
+                            let _ = client.store(request).await;
+                            // Note: Errors are ignored as we do not wait for response
+                        }
+                    });
+                }
+            }
+
+        }
+
+        // Acknowledge that the local store operation was initiated successfully.
         Ok(Response::new(StoreResponse { success: true }))
     }
 
+
+    // The find_node method is used to find the K closest nodes to a target node ID.
     async fn find_node(&self, request: Request<FindNodeRequest>) -> Result<Response<FindNodeResponse>, Status> {
         let node = self.lock().await;
     
@@ -264,4 +313,28 @@ pub async fn run_server(addr: &str, bootstrap_addr: Option<String>) -> Result<()
         .await?;
 
     Ok(())
+}
+
+
+
+// Assume `storage` is a tokio::sync::Mutex<HashMap<Bytes, Bytes>>
+pub async fn print_storage(node: &Node) {
+    let storage = node.storage.lock().await; // Lock is acquired here
+    print_hash_table(&*storage);  // Pass a reference to the underlying HashMap
+    // Lock is automatically released here as `storage` goes out of scope
+}
+
+// Simplified `print_hash_table` to accept a reference to the HashMap directly
+pub fn print_hash_table(storage: &HashMap<Bytes, Bytes>) {
+    if storage.is_empty() {
+        println!("Storage is empty.");
+    } else {
+        println!("{:<20} | {:<20}", "Key", "Value");
+        println!("{:-<43}", ""); // Print a dividing line
+        for (key, value) in storage.iter() {
+            println!("{:<20} | {:<20}",
+                     key.encode_hex::<String>(),
+                     value.encode_hex::<String>());
+        }
+    }
 }
