@@ -65,13 +65,35 @@ impl RoutingTable {
     }
 
     pub fn add_node(&mut self, node: NodeInfo, own_id: &Bytes) {
+        if node.id == self.own_id {
+            return;
+        }
         let bucket_index = self.calculate_bucket_index(&node.id, own_id);
         self.buckets[bucket_index].add(node);
     }
 
-    pub fn find_closest(&self, id: &Bytes, own_id: &Bytes) -> Vec<NodeInfo> {
-        let bucket_index = self.calculate_bucket_index(id, own_id);
-        self.buckets[bucket_index].nodes.iter().cloned().collect()
+    pub fn find_closest(&self, target_id: &Bytes) -> Vec<NodeInfo> {
+        let primary_index = self.calculate_bucket_index(target_id, &self.own_id);
+        let mut closest_nodes = Vec::new();
+
+        let mut distance = 0;
+        while closest_nodes.len() < K && (primary_index >= distance || primary_index + distance < N_BITS) {
+            // Check lower bucket if it exists and isn't the same as the higher one
+            if primary_index >= distance {
+                closest_nodes.extend(self.buckets[primary_index - distance].nodes.iter().cloned());
+            }
+            // Check higher bucket if it exists
+            if primary_index + distance < N_BITS && distance > 0 {
+                closest_nodes.extend(self.buckets[primary_index + distance].nodes.iter().cloned());
+            }
+            // Increment distance for the next iteration to check the next set of buckets
+            distance += 1;
+        }
+
+        // Sort and truncate to return the closest K nodes
+        closest_nodes.sort_by_key(|node| Self::xor_distance(&node.id, target_id));
+        closest_nodes.truncate(K);
+        closest_nodes
     }
 
     pub fn from_proto_nodes(proto_nodes: Vec<ProtoNodeInfo>) -> Vec<NodeInfo> {

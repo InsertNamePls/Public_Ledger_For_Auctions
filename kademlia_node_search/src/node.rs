@@ -53,18 +53,6 @@ impl Node {
             routing_table,
         }));
 
-        /*
-        // Add self to routing table
-        {
-            let node_lock = node.lock().await;
-            let mut routing_table = node_lock.routing_table.lock().await;
-            routing_table.add_node(NodeInfo {
-                id: node_id.clone(),
-                addr: addr,
-            }, &node_id);
-        }
-        */
-
         // Fetch the bootstrap node's routing table if provided
         if let Some(addr) = bootstrap_addr {
             println!("{}", format!("Fetching routing table from bootstrap node: {}", addr).blue());
@@ -126,7 +114,7 @@ impl Node {
         let mut routing_table = self.routing_table.lock().await;
         let mut _counter: i64 = 0;
         for new_node in nodes {
-            if !routing_table.contains(&new_node.id) {
+            if self.id != new_node.id && !routing_table.contains(&new_node.id) {
                 _counter += 1;
                 routing_table.add_node(new_node, &self.id);
             }
@@ -221,7 +209,7 @@ impl Kademlia for Arc<Mutex<Node>> {
         // Retrieve the closest nodes from the routing table
         let closest_nodes = {
             let routing_table = node.routing_table.lock().await;
-            routing_table.find_closest(&target_id, &node.id)
+            routing_table.find_closest(&target_id)
         };
     
         // Check if the requester's node info is already in the routing table
