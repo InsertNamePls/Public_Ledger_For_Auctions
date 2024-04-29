@@ -53,6 +53,7 @@ impl Node {
             routing_table,
         }));
 
+        /*
         // Add self to routing table
         {
             let node_lock = node.lock().await;
@@ -62,6 +63,7 @@ impl Node {
                 addr: addr,
             }, &node_id);
         }
+        */
 
         // Fetch the bootstrap node's routing table if provided
         if let Some(addr) = bootstrap_addr {
