@@ -7,6 +7,38 @@ This component implements a basic version of a Kademlia Distributed Hash Table (
 - **FIND_NODE**: Returns information about the k closest nodes to a given target node ID.
 - **FIND_VALUE**: Similar to FIND_NODE, but returns the stored value for a given key if available.
 
+## Flowchart Representation
+
+```
+[Start Node]
+    ↓
+[Initialize Node]
+    |→ [Generate Node ID]
+    |→ [Set Up Routing Table]
+    |→ [Fetch Routing Table from Bootstrap (optional)]
+    ↓
+[Run Server]
+    ↓
+[Listen for Requests]
+    |→ [Handle `ping`]
+    |→ [Handle `store`]
+    |→ [Handle `find_node`]
+    |   |→ [Update Routing Table with Requester Info (if new)]
+    |   |→ [Return Closest Nodes]
+    |→ [Handle `find_value`]
+    ↓
+[Periodic Routing Table Refresh]
+    |→ [Select Random Node]
+    |→ [Fetch and Merge Routing Table]
+    ↓
+[Maintain Node Connections]
+    |→ [Validate Nodes]
+    |→ [Remove Non-responsive Nodes]
+    ↓
+[Continue Listening for Requests]
+
+```
+
 ## Prerequisites
 Before you begin, ensure you have met the following requirements:
 

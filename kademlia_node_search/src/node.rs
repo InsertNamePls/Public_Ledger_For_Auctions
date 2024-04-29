@@ -18,6 +18,8 @@ use tokio::time::{self, Duration,timeout};
 use self::routing_table::NodeInfo;
 use rand::SeedableRng;
 use colored::*; 
+use hex::ToHex; 
+
 
 
 //Upper limit for random routing table refresh
@@ -31,6 +33,7 @@ const TIMEOUT_MAX_ATTEMPTS: u64 = 3;
 
 pub struct Node {
     id: Bytes,
+    addr: SocketAddr,
     storage: Mutex<HashMap<Bytes, Bytes>>,
     routing_table: Mutex<RoutingTable>,
 }
@@ -40,11 +43,12 @@ impl Node {
         let node_id = Self::generate_id().await;
         let routing_table = Mutex::new(RoutingTable::new(node_id.clone()));
 
-        println!("{:?}", format!("Generated node ID: {:?}", node_id).green().bold());
+        println!("{}", format!("Generated node ID: {}", node_id.encode_hex::<String>()).green().bold());
 
         // Create a node instance within an Arc<Mutex<>> wrapper
         let node = Arc::new(Mutex::new(Node {
             id: node_id.clone(),
+            addr: addr,
             storage: Mutex::new(HashMap::new()),
             routing_table,
         }));
@@ -94,6 +98,7 @@ impl Node {
                     println!("{}", format!("Received ping response: {:?}", ping_response).green());
                     let find_node_request = Request::new(FindNodeRequest {
                         requester_node_id: self.id.to_vec(),
+                        requester_node_address: self.addr.to_string(),
                         target_node_id: ping_response.node_id,
                     });
 
@@ -167,6 +172,9 @@ impl Node {
 
 #[tonic::async_trait]
 impl Kademlia for Arc<Mutex<Node>> {
+    // Implement the gRPC service methods
+
+    // The ping method is used to check if a node is online.
     async fn ping(&self, request: Request<PingRequest>) -> Result<Response<PingResponse>, Status> {
         let node = self.lock().await;
         println!("{}", format!("Received ping request: {:?}", request).blue());
@@ -177,6 +185,7 @@ impl Kademlia for Arc<Mutex<Node>> {
         Ok(Response::new(response))
     }
 
+    // The store method is used to store a key-value pair in the DHT.
     async fn store(&self, request: Request<StoreRequest>) -> Result<Response<StoreResponse>, Status> {
         let node = self.lock().await;
         println!("{}", format!("Received store request: {:?}", request).blue());
@@ -194,8 +203,18 @@ impl Kademlia for Arc<Mutex<Node>> {
 
     async fn find_node(&self, request: Request<FindNodeRequest>) -> Result<Response<FindNodeResponse>, Status> {
         let node = self.lock().await;
-        println!("{}", format!("Received find_node request: {:?}", request).blue());
-        let target_id = Bytes::from(request.into_inner().target_node_id);
+    
+        // Extract all necessary data before moving `request`
+        let req_inner = request.into_inner();
+        let target_id = Bytes::from(req_inner.target_node_id.clone()); // Clone if necessary
+        let requester_id = Bytes::from(req_inner.requester_node_id);
+        let requester_address = req_inner.requester_node_address;
+        
+        // Log the incoming request
+        println!("{}", format!("Received find_node request from [{}]: target_id {}, requester_id {}", 
+                              requester_address, 
+                              target_id.encode_hex::<String>(), 
+                              requester_id.encode_hex::<String>()).blue());
     
         // Retrieve the closest nodes from the routing table
         let closest_nodes = {
@@ -203,15 +222,32 @@ impl Kademlia for Arc<Mutex<Node>> {
             routing_table.find_closest(&target_id, &node.id)
         };
     
-        // Log the found nodes and prepare the response
+        // Check if the requester's node info is already in the routing table
+        let mut routing_table = node.routing_table.lock().await;
+        if !routing_table.contains(&requester_id) {
+            let requester_node_info = NodeInfo {
+                id: requester_id,
+                addr: requester_address.parse::<SocketAddr>().unwrap(), // Assumption: the address is valid and can be parsed
+            };
+            
+            // Try adding the requester to the routing table
+            routing_table.add_node(requester_node_info, &node.id);
+            println!("{}", "Added requester's information to routing table.".green());
+            println!("{}", "Updated routing table:".green());
+            routing_table.print_table();
+        }
+    
+        // Prepare the response with the found nodes
         let proto_nodes = closest_nodes.iter().map(|node_info| ProtoNodeInfo {
             id: node_info.id.clone().to_vec(),
             address: node_info.addr.to_string(),
         }).collect::<Vec<_>>();
-
+    
         Ok(Response::new(FindNodeResponse { nodes: proto_nodes }))
     }
 
+
+    // The find_value method is used to find the value associated with a key in the DHT.
     async fn find_value(&self, request: Request<FindValueRequest>) -> Result<Response<FindValueResponse>, Status> {
         let node: tokio::sync::MutexGuard<'_, Node> = self.lock().await;
         println!("{}", format!("Received find_value request: {:?}", request).blue());
