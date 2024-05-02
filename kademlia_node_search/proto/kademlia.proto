@@ -37,11 +37,11 @@ message FindNodeResponse {
 }
 
 message FindValueRequest {
-    string key = 1; // Key for which the value is being searched
+    bytes key = 1; // Key for which the value is being searched
 }
 
 message FindValueResponse {
-    string value = 1; // Value associated with the key, if found
+    bytes value = 1; // Value associated with the key, if found
     repeated NodeInfo nodes = 2; // List of closest nodes to the key, if value not found
 }
 

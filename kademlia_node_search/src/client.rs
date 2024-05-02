@@ -6,11 +6,19 @@ use std::time::Duration;
 use tokio::time::sleep;
 use bytes::Bytes;
 use crate::kademlia::kademlia_client::KademliaClient;
-use crate::kademlia::{PingRequest, StoreRequest, FindNodeRequest, FindNodeResponse, StoreResponse};
+use crate::kademlia::{PingRequest, StoreRequest, FindNodeRequest, FindNodeResponse, StoreResponse, FindValueRequest, FindValueResponse};
+use std::env;
 
 pub async fn run_client(target: &str, command: &str) -> Result<(), Box<dyn std::error::Error>> {
     let endpoint = format!("http://{}", target);
     let mut client = KademliaClient::connect(endpoint).await?;
+
+    // Collect user input for the key
+    println!("Enter a key (text) for the operation:");
+    let mut user_input = String::new();
+    std::io::stdin().read_line(&mut user_input)?;
+    let user_input_bytes = user_input.trim().to_string().into_bytes();
+    let key = Bytes::from(user_input_bytes);
 
     match command {
         "ping" => {
@@ -22,17 +30,34 @@ pub async fn run_client(target: &str, command: &str) -> Result<(), Box<dyn std::
             println!("Received ping response: {:?}", response.into_inner());
         },
         "store" => {
-                println!("Sending Store request");
-                let key = generate_bytes(20).to_vec();
-                let value = generate_bytes(10).to_vec();
-                let store_request = StoreRequest { 
-                    key, 
-                    value 
-                };
+            println!("Sending Store request with key: {}", user_input.trim());
+            let value = generate_bytes(10).to_vec();  // Generate a random value
+            let store_request = StoreRequest { 
+                key: key.to_vec(), 
+                value 
+            };
 
-                let request = Request::new(store_request);
-                let response = client.store(request).await?;
-                println!("Store response: {:?}", response.into_inner());
+            let request = Request::new(store_request);
+            let response = client.store(request).await?;
+            println!("Store response: {:?}", response.into_inner());
+        },
+        "find_value" => {
+            println!("Sending Find Value request for key: {}", user_input.trim());
+            let find_value_request = FindValueRequest { 
+                key: key.to_vec(),
+            };
+
+            let request = Request::new(find_value_request);
+            let response = client.find_value(request).await?;
+            match response.into_inner() {
+                FindValueResponse { value, nodes } => {
+                    if !value.is_empty() {
+                        println!("Value found: {:?}", value);
+                    } else {
+                        println!("Value not found, closest nodes: {:?}", nodes);
+                    }
+                }
+            }
         },
         _ => {
             println!("Unsupported command '{}'", command);

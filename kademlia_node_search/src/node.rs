@@ -286,15 +286,41 @@ impl Kademlia for Arc<Mutex<Node>> {
     }
 
 
-    // The find_value method is used to find the value associated with a key in the DHT.
+   // The find_value method is used to find the value associated with a key in the DHT.
     async fn find_value(&self, request: Request<FindValueRequest>) -> Result<Response<FindValueResponse>, Status> {
-        let node: tokio::sync::MutexGuard<'_, Node> = self.lock().await;
+        let node = self.lock().await;
         println!("{}", format!("Received find_value request: {:?}", request).blue());
         let find_value_request = request.into_inner();
         let key = Bytes::from(find_value_request.key);
         println!("{}", format!("Key requested: {:?}", key).yellow());
-    
-        unimplemented!();
+
+        // First, check if the key is present in the local storage
+        let storage = node.storage.lock().await;
+        if let Some(value) = storage.get(&key) {
+            // If the key is found, return the value
+            return Ok(Response::new(FindValueResponse {
+                value: value.clone().to_vec(),  // Assuming value is `Bytes` and needs to be converted to `Vec<u8>`
+                nodes: vec![],  // No nodes need to be returned since the value was found
+            }));
+        }
+
+        // If the key is not found locally, find the closest nodes
+        let routing_table = node.routing_table.lock().await;
+        let closest_nodes = routing_table.find_closest(&key);
+        
+        // Convert NodeInfo from internal structure to protobuf format
+        let proto_nodes = closest_nodes.iter().map(|node_info| {
+            crate::kademlia::NodeInfo {
+                id: node_info.id.clone().to_vec(),
+                address: node_info.addr.to_string(),
+            }
+        }).collect::<Vec<_>>();
+
+        // Respond with the closest nodes if the value is not found locally
+        Ok(Response::new(FindValueResponse {
+            value: Vec::new(),  // No value found
+            nodes: proto_nodes, // Closest nodes to the requested key
+        }))
     }
 }
 
@@ -313,28 +339,4 @@ pub async fn run_server(addr: &str, bootstrap_addr: Option<String>) -> Result<()
         .await?;
 
     Ok(())
-}
-
-
-
-// Assume `storage` is a tokio::sync::Mutex<HashMap<Bytes, Bytes>>
-pub async fn print_storage(node: &Node) {
-    let storage = node.storage.lock().await; // Lock is acquired here
-    print_hash_table(&*storage);  // Pass a reference to the underlying HashMap
-    // Lock is automatically released here as `storage` goes out of scope
-}
-
-// Simplified `print_hash_table` to accept a reference to the HashMap directly
-pub fn print_hash_table(storage: &HashMap<Bytes, Bytes>) {
-    if storage.is_empty() {
-        println!("Storage is empty.");
-    } else {
-        println!("{:<20} | {:<20}", "Key", "Value");
-        println!("{:-<43}", ""); // Print a dividing line
-        for (key, value) in storage.iter() {
-            println!("{:<20} | {:<20}",
-                     key.encode_hex::<String>(),
-                     value.encode_hex::<String>());
-        }
-    }
 }
