@@ -1,8 +1,8 @@
 FROM debian:trixie
 WORKDIR /home/
 
-RUN apt-get update -y
-RUN apt-get install -y \
+# Install necessary packages
+RUN apt-get update -y && apt-get install -y \
   build-essential \
   curl \
   cargo \
@@ -12,15 +12,21 @@ RUN apt-get install -y \
   vim \
   iputils-ping \
   ssh \
-  protobuf-compiler
-#RUN mkdir /home/ssh_keys && \
-#    openssl genrsa -out /home/ssh_keys/private.pem 2048 && \
-#    openssl rsa -in private.pem -outform PEM -pubout -out public.pem
+  protobuf-compiler \
+  python3 \
+  python3-pip
 
+# Install Rust
 RUN curl https://sh.rustup.rs -sSf | bash -s -- -y
-#RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | bash -s -- -y
 
+# Copy your Flask application
 COPY . /home/
 
+# Install Python dependencies
+RUN pip3 install -r requirements.txt
 
+# Expose the port Flask is running on
+EXPOSE 5000
 
+# Command to run the Flask application
+CMD ["python3", "app.py"]

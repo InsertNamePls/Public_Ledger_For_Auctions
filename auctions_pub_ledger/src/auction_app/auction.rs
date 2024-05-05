@@ -89,6 +89,7 @@ pub async fn load_auction_data() -> Result<AuctionHouse, Box<dyn std::error::Err
     let auctions: AuctionHouse = serde_json::from_str(&data)?;
     Ok(auctions)
 }
+
 pub async fn list_auctions() -> AuctionHouse {
     let result = get_files_in_directory("auctions");
     match result {
