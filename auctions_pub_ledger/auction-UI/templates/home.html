@@ -63,45 +63,7 @@
                 <div class="main-box clearfix">
                     <h2>Auction History</h2>
                     <div class="table-responsive">
-                      <table class="table table-hover">
-                          <thead>
-                              <tr>
-                                  <th><span>Product Name</span></th>
-                                  <th><span>Bid Price</span></th>
-                                  <th><span>End Time</span></th>
-                                  <th><span>Auction State</span></th>
-                              </tr>
-                          </thead>
-                          <tbody>
-                              <tr>
-                                  <td>Antique Vase</td>
-                                  <td>$150</td>
-                                  <td>2023/12/01 15:00</td>
-                                  <td>Closed</td>
-                              </tr>
-                              <tr>
-                                  <td>Rare Painting</td>
-                                  <td>$300</td>
-                                  <td>2023/11/30 18:00</td>
-                                  <td>Closed</td>
-                              </tr>
-                              <tr>
-                                  <td>Vintage Watch</td>
-                                  <td>$200</td>
-                                  <td>2023/11/28 12:00</td>
-                                  <td>Closed</td>
-                              </tr>
-                          </tbody>
-                      </table>
-                  </div>
-                </div>
-            </div>
-            <div class="col-md-6">
-                <!-- Second column for Following Items -->
-                <div class="main-box clearfix">
-                    <h2>Following Items</h2>
-                    <div class="table-responsive">
-                        <table class="table table-hover">
+                        <table class="table table-hover" id="auctionHistoryTable">
                             <thead>
                                 <tr>
                                     <th><span>Product Name</span></th>
@@ -111,24 +73,26 @@
                                 </tr>
                             </thead>
                             <tbody>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <!-- Second column for Following Items -->
+                <div class="main-box clearfix">
+                    <h2>Following Items</h2>
+                    <div class="table-responsive">
+                        <table class="table table-hover" id="followingItemsTable">
+                            <thead>
                                 <tr>
-                                    <td>Sculpture Piece</td>
-                                    <td>$450</td>
-                                    <td>2023/12/05 14:00</td>
-                                    <td>Active</td>
+                                    <th><span>Product Name</span></th>
+                                    <th><span>Bid Price</span></th>
+                                    <th><span>End Time</span></th>
+                                    <th><span>Auction State</span></th>
                                 </tr>
-                                <tr>
-                                    <td>Designer Lamp</td>
-                                    <td>$75</td>
-                                    <td>2023/12/04 16:00</td>
-                                    <td>Active</td>
-                                </tr>
-                                <tr>
-                                    <td>Antique Chair</td>
-                                    <td>$125</td>
-                                    <td>2023/12/03 19:00</td>
-                                    <td>Active</td>
-                                </tr>
+                            </thead>
+                            <tbody>
                             </tbody>
                         </table>
                     </div>
@@ -139,7 +103,7 @@
         <div class="main-box clearfix">
             <h2>Open Auctions</h2>
             <div class="table-responsive">
-                <table class="table table-hover">
+                <table class="table table-hover" id="openAuctionsTable">
                     <thead>
                         <tr>
                             <th><span>Product Name</span></th>
@@ -149,31 +113,54 @@
                         </tr>
                     </thead>
                     <tbody>
-                        <tr>
-                            <td>Classic Car Model</td>
-                            <td>$500</td>
-                            <td>2023/12/10 17:00</td>
-                            <td>Active</td>
-                        </tr>
-                        <tr>
-                            <td>Luxury Yacht</td>
-                            <td>$750,000</td>
-                            <td>2023/12/20 20:00</td>
-                            <td>Active</td>
-                        </tr>
-                        <tr>
-                            <td>Exclusive Wine Collection</td>
-                            <td>$1,200</td>
-                            <td>2023/12/15 21:00</td>
-                            <td>Active</td>
-                        </tr>
                     </tbody>
                 </table>
             </div> 
         </div>
     </div>
+    
 
     <script src="https://code.jquery.com/jquery-1.10.2.min.js"></script>
     <script src="https://netdna.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js"></script>
 </body>
 </html>
+
+
+<script>
+    $(document).ready(function() {
+        function fetchAndDisplayAuctions() {
+            $.getJSON('/api/auctions', function(data) {
+                var auctions = data.auctions;
+                var auctionHistoryHtml = '';
+                var followingItemsHtml = '';
+                var openAuctionsHtml = '';
+    
+                Object.keys(auctions).forEach(function(key) {
+                    var auction = auctions[key];
+                    var rowHtml = '<tr>' +
+                        '<td>' + auction.item_name + '</td>' +
+                        '<td>$' + (auction.bids.length > 0 ? auction.bids[auction.bids.length - 1].amount : auction.starting_bid) + '</td>' +
+                        '<td>' + new Date(auction.end_time * 1000).toLocaleString() + '</td>' +
+                        '<td>' + (auction.active ? 'Active' : 'Closed') + '</td>' +
+                        '</tr>';
+    
+                    // Determine which table to populate
+                    if (!auction.active) {
+                        auctionHistoryHtml += rowHtml;  // Closed auctions go here
+                    } else {
+                        openAuctionsHtml += rowHtml;  // Active auctions go here
+                        followingItemsHtml += rowHtml; // Assuming you want all active items in 'Following'
+                    }
+                });
+    
+                $('#auctionHistoryTable tbody').html(auctionHistoryHtml);
+                $('#followingItemsTable tbody').html(followingItemsHtml);
+                $('#openAuctionsTable tbody').html(openAuctionsHtml);
+            });
+        }
+    
+        fetchAndDisplayAuctions();
+        setInterval(fetchAndDisplayAuctions, 30000); // Optional: Refresh data every 30 seconds
+    });
+    </script>
+    
