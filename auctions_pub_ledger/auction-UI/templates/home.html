@@ -14,16 +14,19 @@
             font-family: 'Courier New', monospace;
             text-align: center;
         }
+        .profile-info {
+            background-color: #222; /* darker background for highlight */
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            display: inline-block; /* make it more centered and neat */
+        }
         .main-box {
             border: 1px solid #444;
             background-color: #282828;
             border-radius: 4px;
             margin-bottom: 20px;
             padding: 20px;
-        }
-        .table {
-            width: 100%;
-            margin: auto;
         }
         .table-hover>tbody>tr:hover>td,
         .table-hover>tbody>tr:hover>th {
@@ -38,7 +41,7 @@
         h2, .profile-info {
             color: #33ff33;
         }
-        .logout-button {
+        .logout-button, .bid-button {
             background: none;
             border: 1px solid #33ff33;
             border-radius: 4px;
@@ -47,20 +50,65 @@
             margin-top: 10px;
             cursor: pointer;
         }
-        .bid-button {
-            color: #33ff33;
-            background-color: transparent;
-            border: none;
-            cursor: pointer;
-        }
         .modal-content {
-            background-color: #282828;
+            background-color: #121212; /* darker theme for modal */
             color: #33ff33;
+            border: 1px solid #444;
         }
         .btn-success {
             border-color: #33cc33;
             background-color: #33cc33;
         }
+        .modal-content {
+    background-color: #121212; /* darker theme for modal */
+    color: #33ff33;
+    border: 1px solid #444;
+    border-radius: 0; /* removing border-radius for a sharper look */
+}
+
+.modal-header, .modal-body, .modal-footer {
+    border-bottom: 1px dotted #333; /* dotted lines for a more digital, hacker vibe */
+}
+
+.modal-header .close {
+    color: #33ff33; /* adjust close button color */
+    opacity: 1; /* make sure it's visible */
+}
+
+.modal-title {
+    color: #33ff33;
+}
+
+/* Styling for the form inputs */
+input[type="number"], .form-control {
+    background-color: #222;
+    border: 1px solid #333;
+    color: #33ff33;
+}
+
+/* Button styles for a more thematic look */
+.btn {
+    background-color: transparent;
+    color: #33ff33;
+    border: 1px solid #33ff33;
+}
+
+.btn:hover {
+    background-color: #333;
+    color: #fff;
+}
+
+/* Specific styles for the success button to make it stand out */
+.btn-success {
+    border-color: #33cc33;
+    background-color: #33cc33;
+}
+
+.btn-success:hover {
+    background-color: #29a329; /* slightly darker on hover */
+    border-color: #28a028;
+}
+
     </style>
 </head>
 <body>
@@ -145,7 +193,8 @@
         <div class="modal-dialog" role="document">
             <div class="modal-content">
                 <div class="modal-header">
-                    <button type="button" the close button, data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+
                     <h4 class="modal-title" id="myModalLabel">Place Your Bid</h4>
                 </div>
                 <div class="modal-body">
@@ -166,6 +215,7 @@
 
     <script src="https://code.jquery.com/jquery-1.10.2.min.js"></script>
     <script src="https://netdna.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js"></script>
+    <script type="text/javascript" src="javascript/script.js"></script>
     <script>
         $(document).ready(function() {
             function fetchAndDisplayAuctions() {
