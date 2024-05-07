@@ -5,71 +5,90 @@
     <title>Auction House Dashboard</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link href="https://netdna.bootstrapcdn.com/bootstrap/3.3.6/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://maxcdn.bootstrapcdn.com/font-awesome/4.7.0/css/font-awesome.min.css" rel="stylesheet">
     <style type="text/css">
         body {
-            margin-top: 70px; /* Adjusted to ensure the navbar does not overlap content */
+            margin-top: 70px;
+            background-color: #121212;
+            color: #33ff33;
+            font-family: 'Courier New', monospace;
+            text-align: center;
+        }
+        .main-box {
+            border: 1px solid #444;
+            background-color: #282828;
+            border-radius: 4px;
+            margin-bottom: 20px;
+            padding: 20px;
         }
         .table {
-            border-collapse: separate;
+            width: 100%;
+            margin: auto;
         }
         .table-hover>tbody>tr:hover>td,
         .table-hover>tbody>tr:hover>th {
-            background-color: #eee;
+            background-color: #333;
         }
-        .table thead>tr>th {
-            border-bottom: 1px solid #C2C2C2;
-            padding-bottom: 0;
-        }
+        .table thead>tr>th,
         .table tbody>tr>td {
-            font-size: 0.875em;
-            background: #f5f5f5;
-            border-top: 10px solid #fff;
-            vertical-align: middle;
-            padding: 12px 8px;
+            border-bottom: 1px solid #444;
+            background-color: #222;
+            text-align: center;
         }
-        .table tbody>tr>td:first-child,
-        .table thead>tr>th:first-child {
-            padding-left: 20px;
+        h2, .profile-info {
+            color: #33ff33;
+        }
+        .logout-button {
+            background: none;
+            border: 1px solid #33ff33;
+            border-radius: 4px;
+            color: #33ff33;
+            padding: 5px 10px;
+            margin-top: 10px;
+            cursor: pointer;
+        }
+        .bid-button {
+            color: #33ff33;
+            background-color: transparent;
+            border: none;
+            cursor: pointer;
+        }
+        .modal-content {
+            background-color: #282828;
+            color: #33ff33;
+        }
+        .btn-success {
+            border-color: #33cc33;
+            background-color: #33cc33;
         }
     </style>
 </head>
 <body>
-    <!-- Navbar -->
-    <nav class="navbar navbar-default navbar-fixed-top">
-        <div class="container">
-            <div class="navbar-header">
-                <button type="button" class="navbar-toggle collapsed" data-toggle="collapse" data-target="#navbar-collapse">
-                    <span class="sr-only">Toggle navigation</span>
-                    <span class="icon-bar"></span>
-                    <span class="icon-bar"></span>
-                    <span class="icon-bar"></span>
-                </button>
-                <a class="navbar-brand" href="#">Auction House</a>
-            </div>
-            <div class="collapse navbar-collapse" id="navbar-collapse">
-                <ul class="nav navbar-nav">
-                    <li class="active"><a href="#">Home</a></li>
-                    <li><a href="#">Contact</a></li>
-                </ul>
+    <div class="container">
+        <!-- User Profile -->
+        <div class="row">
+            <div class="col-md-12">
+                <div class="profile-info">
+                    <span>Username: JohnDoe </span> |
+                    <span>Credits: $5000 </span> |
+                    <button class="logout-button">Logout</button>
+                </div>
             </div>
         </div>
-    </nav>
 
-    <!-- Main content area -->
-    <div class="container">
+        <!-- Main content area -->
         <div class="row">
             <div class="col-md-6">
-                <!-- First column for Auction History -->
                 <div class="main-box clearfix">
                     <h2>Auction History</h2>
                     <div class="table-responsive">
                         <table class="table table-hover" id="auctionHistoryTable">
                             <thead>
                                 <tr>
-                                    <th><span>Product Name</span></th>
-                                    <th><span>Bid Price</span></th>
-                                    <th><span>End Time</span></th>
-                                    <th><span>Auction State</span></th>
+                                    <th>Product Name</th>
+                                    <th>Bid Price</th>
+                                    <th>End Time</th>
+                                    <th>Auction State</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -79,17 +98,17 @@
                 </div>
             </div>
             <div class="col-md-6">
-                <!-- Second column for Following Items -->
                 <div class="main-box clearfix">
                     <h2>Following Items</h2>
                     <div class="table-responsive">
                         <table class="table table-hover" id="followingItemsTable">
                             <thead>
                                 <tr>
-                                    <th><span>Product Name</span></th>
-                                    <th><span>Bid Price</span></th>
-                                    <th><span>End Time</span></th>
-                                    <th><span>Auction State</span></th>
+                                    <th>Product Name</th>
+                                    <th>Bid Price</th>
+                                    <th>End Time</th>
+                                    <th>Auction State</th>
+                                    <th>Action</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -99,6 +118,7 @@
                 </div>
             </div>
         </div>
+
         <!-- Full-width table for Open Auctions -->
         <div class="main-box clearfix">
             <h2>Open Auctions</h2>
@@ -106,10 +126,11 @@
                 <table class="table table-hover" id="openAuctionsTable">
                     <thead>
                         <tr>
-                            <th><span>Product Name</span></th>
-                            <th><span>Bid Price</span></th>
-                            <th><span>End Time</span></th>
-                            <th><span>Auction State</span></th>
+                            <th>Product Name</th>
+                            <th>Bid Price</th>
+                            <th>End Time</th>
+                            <th>Auction State</th>
+                            <th>Action</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -118,49 +139,76 @@
             </div> 
         </div>
     </div>
-    
+
+    <!-- Bid Modal -->
+    <div class="modal fade" id="bidModal" tabindex="-1" role="dialog" aria-labelledby="bidModalLabel">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" the close button, data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+                    <h4 class="modal-title" id="myModalLabel">Place Your Bid</h4>
+                </div>
+                <div class="modal-body">
+                    <form>
+                        <div class="form-group">
+                            <label for="bidAmount">Bid Amount</label>
+                            <input type="number" class="form-control" id="bidAmount">
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
+                    <button type="button" class="btn btn-success" id="placeBidButton">Place Bid</button>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <script src="https://code.jquery.com/jquery-1.10.2.min.js"></script>
     <script src="https://netdna.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js"></script>
+    <script>
+        $(document).ready(function() {
+            function fetchAndDisplayAuctions() {
+                $.getJSON('/api/auctions', function(data) {
+                    var auctions = data.auctions;
+                    var auctionHistoryHtml = '';
+                    var followingItemsHtml = '';
+                    var openAuctionsHtml = '';
+        
+                    Object.keys(auctions).forEach(function(key) {
+                        var auction = auctions[key];
+                        var actionButtonHtml = '<td><button class="bid-button fa fa-money" onclick="showBidModal()"></button></td>';
+                        var rowHtml = '<tr>' +
+                            '<td>' + auction.item_name + '</td>' +
+                            '<td>$' + (auction.bids.length > 0 ? auction.bids[auction.bids.length - 1].amount : auction.starting_bid) + '</td>' +
+                            '<td>' + new Date(auction.end_time * 1000).toLocaleString() + '</td>' +
+                            '<td>' + (auction.active ? 'Active' : 'Closed') + '</td>';
+        
+                        if (!auction.active) {
+                            auctionHistoryHtml += rowHtml + '</tr>';
+                        } else {
+                            openAuctionsHtml += rowHtml + actionButtonHtml + '</tr>';
+                            if (auction.following) { // Check if auction is followed
+                                followingItemsHtml += rowHtml + actionButtonHtml + '</tr>';
+                            } else {
+                                followingItemsHtml += rowHtml + '<td></td></tr>'; // No action button if not followed
+                            }
+                        }
+                    });
+        
+                    $('#auctionHistoryTable tbody').html(auctionHistoryHtml);
+                    $('#followingItemsTable tbody').html(followingItemsHtml);
+                    $('#openAuctionsTable tbody').html(openAuctionsHtml);
+                });
+            }
+        
+            fetchAndDisplayAuctions();
+            setInterval(fetchAndDisplayAuctions, 30000); // Refresh data every 30 seconds
+        
+            window.showBidModal = function() {
+                $('#bidModal').modal('show');
+            }
+        });
+    </script>
 </body>
 </html>
-
-
-<script>
-    $(document).ready(function() {
-        function fetchAndDisplayAuctions() {
-            $.getJSON('/api/auctions', function(data) {
-                var auctions = data.auctions;
-                var auctionHistoryHtml = '';
-                var followingItemsHtml = '';
-                var openAuctionsHtml = '';
-    
-                Object.keys(auctions).forEach(function(key) {
-                    var auction = auctions[key];
-                    var rowHtml = '<tr>' +
-                        '<td>' + auction.item_name + '</td>' +
-                        '<td>$' + (auction.bids.length > 0 ? auction.bids[auction.bids.length - 1].amount : auction.starting_bid) + '</td>' +
-                        '<td>' + new Date(auction.end_time * 1000).toLocaleString() + '</td>' +
-                        '<td>' + (auction.active ? 'Active' : 'Closed') + '</td>' +
-                        '</tr>';
-    
-                    // Determine which table to populate
-                    if (!auction.active) {
-                        auctionHistoryHtml += rowHtml;  // Closed auctions go here
-                    } else {
-                        openAuctionsHtml += rowHtml;  // Active auctions go here
-                        followingItemsHtml += rowHtml; // Assuming you want all active items in 'Following'
-                    }
-                });
-    
-                $('#auctionHistoryTable tbody').html(auctionHistoryHtml);
-                $('#followingItemsTable tbody').html(followingItemsHtml);
-                $('#openAuctionsTable tbody').html(openAuctionsHtml);
-            });
-        }
-    
-        fetchAndDisplayAuctions();
-        setInterval(fetchAndDisplayAuctions, 30000); // Optional: Refresh data every 30 seconds
-    });
-    </script>
-    
