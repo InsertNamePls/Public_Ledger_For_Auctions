@@ -14,19 +14,13 @@
             font-family: 'Courier New', monospace;
             text-align: center;
         }
-        .profile-info {
-            background-color: #222; /* darker background for highlight */
+        .profile-info, .main-box {
+            background-color: #222;
             padding: 10px;
+            border: 1px dashed #33ff33;
             border-radius: 4px;
             margin-bottom: 20px;
-            display: inline-block; /* make it more centered and neat */
-        }
-        .main-box {
-            border: 1px solid #444;
-            background-color: #282828;
-            border-radius: 4px;
-            margin-bottom: 20px;
-            padding: 20px;
+            display: block;
         }
         .table-hover>tbody>tr:hover>td,
         .table-hover>tbody>tr:hover>th {
@@ -51,64 +45,41 @@
             cursor: pointer;
         }
         .modal-content {
-            background-color: #121212; /* darker theme for modal */
+            background-color: #121212;
             color: #33ff33;
-            border: 1px solid #444;
+            border: 1px dashed #33ff33;
+        }
+        .modal-header, .modal-body, .modal-footer {
+            border-bottom: 1px dotted #333;
+        }
+        .modal-header .close {
+            color: #33ff33;
+        }
+        .modal-title {
+            color: #33ff33;
+        }
+        input[type="number"], .form-control {
+            background-color: #222;
+            border: 1px solid #333;
+            color: #33ff33;
+        }
+        .btn {
+            background-color: transparent;
+            color: #33ff33;
+            border: 1px solid #33ff33;
+        }
+        .btn:hover {
+            background-color: #333;
+            color: #fff;
         }
         .btn-success {
             border-color: #33cc33;
             background-color: #33cc33;
         }
-        .modal-content {
-    background-color: #121212; /* darker theme for modal */
-    color: #33ff33;
-    border: 1px solid #444;
-    border-radius: 0; /* removing border-radius for a sharper look */
-}
-
-.modal-header, .modal-body, .modal-footer {
-    border-bottom: 1px dotted #333; /* dotted lines for a more digital, hacker vibe */
-}
-
-.modal-header .close {
-    color: #33ff33; /* adjust close button color */
-    opacity: 1; /* make sure it's visible */
-}
-
-.modal-title {
-    color: #33ff33;
-}
-
-/* Styling for the form inputs */
-input[type="number"], .form-control {
-    background-color: #222;
-    border: 1px solid #333;
-    color: #33ff33;
-}
-
-/* Button styles for a more thematic look */
-.btn {
-    background-color: transparent;
-    color: #33ff33;
-    border: 1px solid #33ff33;
-}
-
-.btn:hover {
-    background-color: #333;
-    color: #fff;
-}
-
-/* Specific styles for the success button to make it stand out */
-.btn-success {
-    border-color: #33cc33;
-    background-color: #33cc33;
-}
-
-.btn-success:hover {
-    background-color: #29a329; /* slightly darker on hover */
-    border-color: #28a028;
-}
-
+        .btn-success:hover {
+            background-color: #29a329;
+            border-color: #28a028;
+        }
     </style>
 </head>
 <body>
@@ -168,23 +139,25 @@ input[type="number"], .form-control {
         </div>
 
         <!-- Full-width table for Open Auctions -->
-        <div class="main-box clearfix">
-            <h2>Open Auctions</h2>
-            <div class="table-responsive">
-                <table class="table table-hover" id="openAuctionsTable">
-                    <thead>
-                        <tr>
-                            <th>Product Name</th>
-                            <th>Bid Price</th>
-                            <th>End Time</th>
-                            <th>Auction State</th>
-                            <th>Action</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                    </tbody>
-                </table>
-            </div> 
+        <div class="col-md-12">
+            <div class="main-box clearfix">
+                <h2>Open Auctions</h2>
+                <div class="table-responsive">
+                    <table class="table table-hover" id="openAuctionsTable">
+                        <thead>
+                            <tr>
+                                <th>Product Name</th>
+                                <th>Bid Price</th>
+                                <th>End Time</th>
+                                <th>Auction State</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                        </tbody>
+                    </table>
+                </div> 
+            </div>
         </div>
     </div>
 
@@ -213,6 +186,25 @@ input[type="number"], .form-control {
         </div>
     </div>
 
+    <!-- Item Details Modal -->
+    <div class="modal fade" id="itemDetailsModal" tabindex="-1" role="dialog" aria-labelledby="itemDetailsModalLabel">
+        <div class="modal-dialog" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button>
+
+                    <h4 class="modal-title" id="itemDetailsModalLabel">Item Details</h4>
+                </div>
+                <div class="modal-body">
+                    <div id="itemDetailsContent"></div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-default" data-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="https://code.jquery.com/jquery-1.10.2.min.js"></script>
     <script src="https://netdna.bootstrapcdn.com/bootstrap/3.3.6/js/bootstrap.min.js"></script>
     <script type="text/javascript" src="javascript/script.js"></script>
@@ -224,39 +216,50 @@ input[type="number"], .form-control {
                     var auctionHistoryHtml = '';
                     var followingItemsHtml = '';
                     var openAuctionsHtml = '';
-        
+
                     Object.keys(auctions).forEach(function(key) {
                         var auction = auctions[key];
                         var actionButtonHtml = '<td><button class="bid-button fa fa-money" onclick="showBidModal()"></button></td>';
+                        var itemDetailsButtonHtml = '<td><button class="btn btn-info" onclick="showItemDetailsModal(\'' + key + '\')">Details</button></td>';
                         var rowHtml = '<tr>' +
-                            '<td>' + auction.item_name + '</td>' +
+                            '<td onclick="showItemDetailsModal(\'' + key + '\')">' + auction.item_name + '</td>' +
                             '<td>$' + (auction.bids.length > 0 ? auction.bids[auction.bids.length - 1].amount : auction.starting_bid) + '</td>' +
                             '<td>' + new Date(auction.end_time * 1000).toLocaleString() + '</td>' +
                             '<td>' + (auction.active ? 'Active' : 'Closed') + '</td>';
-        
+
                         if (!auction.active) {
                             auctionHistoryHtml += rowHtml + '</tr>';
                         } else {
                             openAuctionsHtml += rowHtml + actionButtonHtml + '</tr>';
-                            if (auction.following) { // Check if auction is followed
-                                followingItemsHtml += rowHtml + actionButtonHtml + '</tr>';
-                            } else {
-                                followingItemsHtml += rowHtml + '<td></td></tr>'; // No action button if not followed
-                            }
+                            followingItemsHtml += rowHtml + actionButtonHtml + '</tr>';
                         }
                     });
-        
+
                     $('#auctionHistoryTable tbody').html(auctionHistoryHtml);
                     $('#followingItemsTable tbody').html(followingItemsHtml);
                     $('#openAuctionsTable tbody').html(openAuctionsHtml);
                 });
             }
-        
+
             fetchAndDisplayAuctions();
             setInterval(fetchAndDisplayAuctions, 30000); // Refresh data every 30 seconds
-        
+
             window.showBidModal = function() {
                 $('#bidModal').modal('show');
+            }
+
+            window.showItemDetailsModal = function(auctionId) {
+                $.getJSON('/api/auctions/' + auctionId, function(data) {
+                    var itemDetails = data;
+                    var detailsHtml = '<p><strong>Item Name:</strong> ' + itemDetails.item_name + '</p>' +
+                                      '<p><strong>Start Time:</strong> ' + new Date(itemDetails.start_time * 1000).toLocaleString() + '</p>' +
+                                      '<p><strong>End Time:</strong> ' + new Date(itemDetails.end_time * 1000).toLocaleString() + '</p>' +
+                                      '<p><strong>Starting Bid:</strong> ' + itemDetails.starting_bid + '</p>' +
+                                      '<p><strong>Current Highest Bid:</strong> ' + (itemDetails.bids.length > 0 ? itemDetails.bids[itemDetails.bids.length - 1].amount : 'No bids yet') + '</p>' +
+                                      '<p><strong>Bid History:</strong> ' + itemDetails.bids.map(bid => 'Bidder: ' + bid.bidder + ', Amount: ' + bid.amount).join(', ') + '</p>';
+                    $('#itemDetailsContent').html(detailsHtml);
+                    $('#itemDetailsModal').modal('show');
+                });
             }
         });
     </script>

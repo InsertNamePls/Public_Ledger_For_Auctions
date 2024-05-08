@@ -1,0 +1,101 @@
+body {
+    margin-top: 70px;
+    background-color: #121212;
+    color: #33ff33;
+    font-family: 'Courier New', monospace;
+    text-align: center;
+}
+.profile-info {
+    background-color: #222; /* darker background for highlight */
+    padding: 10px;
+    border-radius: 4px;
+    margin-bottom: 20px;
+    display: inline-block; /* make it more centered and neat */
+}
+.main-box {
+    border: 1px solid #444;
+    background-color: #282828;
+    border-radius: 4px;
+    margin-bottom: 20px;
+    padding: 20px;
+}
+.table-hover>tbody>tr:hover>td,
+.table-hover>tbody>tr:hover>th {
+    background-color: #333;
+}
+.table thead>tr>th,
+.table tbody>tr>td {
+    border-bottom: 1px solid #444;
+    background-color: #222;
+    text-align: center;
+}
+h2, .profile-info {
+    color: #33ff33;
+}
+.logout-button, .bid-button {
+    background: none;
+    border: 1px solid #33ff33;
+    border-radius: 4px;
+    color: #33ff33;
+    padding: 5px 10px;
+    margin-top: 10px;
+    cursor: pointer;
+}
+.modal-content {
+    background-color: #121212; /* darker theme for modal */
+    color: #33ff33;
+    border: 1px solid #444;
+}
+.btn-success {
+    border-color: #33cc33;
+    background-color: #33cc33;
+}
+.modal-content {
+background-color: #121212; /* darker theme for modal */
+color: #33ff33;
+border: 1px solid #444;
+border-radius: 0; /* removing border-radius for a sharper look */
+}
+
+.modal-header, .modal-body, .modal-footer {
+border-bottom: 1px dotted #333; /* dotted lines for a more digital, hacker vibe */
+}
+
+.modal-header .close {
+color: #33ff33; /* adjust close button color */
+opacity: 1; /* make sure it's visible */
+}
+
+.modal-title {
+color: #33ff33;
+}
+
+/* Styling for the form inputs */
+input[type="number"], .form-control {
+background-color: #222;
+border: 1px solid #333;
+color: #33ff33;
+}
+
+/* Button styles for a more thematic look */
+.btn {
+background-color: transparent;
+color: #33ff33;
+border: 1px solid #33ff33;
+}
+
+.btn:hover {
+background-color: #333;
+color: #fff;
+}
+
+/* Specific styles for the success button to make it stand out */
+.btn-success {
+border-color: #33cc33;
+background-color: #33cc33;
+}
+
+.btn-success:hover {
+background-color: #29a329; /* slightly darker on hover */
+border-color: #28a028;
+}
