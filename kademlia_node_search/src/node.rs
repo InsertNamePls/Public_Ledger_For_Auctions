@@ -3,6 +3,7 @@ mod routing_table;
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::time::Instant;
 use rand_distr::{Distribution, Uniform};
 use tokio::sync::Mutex;
 use bytes::Bytes;
@@ -19,6 +20,15 @@ use self::routing_table::NodeInfo;
 use rand::SeedableRng;
 use colored::*; 
 use hex::ToHex; 
+use ring::{rand as ring_rand, signature};
+use ring::digest::{digest, SHA256};
+use ring::rand::SecureRandom;
+use ring::signature::KeyPair;
+
+use sha2::{Sha256, Digest};
+use rand::rngs::OsRng;
+
+
 
 
 
@@ -30,28 +40,34 @@ const REFRESH_TIMER_LOWER: u64 = 5;
 const TIMEOUT_TIMER: u64 = 3;
 //Maximum number of attempts for each request
 const TIMEOUT_MAX_ATTEMPTS: u64 = 3;
-
+//Leading zero bits for node ID generation
+const C1: u32 = 8;
 pub struct Node {
-    id: Bytes,
-    addr: SocketAddr,
-    storage: Mutex<HashMap<Bytes, Bytes>>,
-    routing_table: Mutex<RoutingTable>,
+    pub keypair: signature::Ed25519KeyPair,
+    pub id: Bytes,
+    pub addr: SocketAddr,
+    pub storage: Mutex<HashMap<Bytes, Bytes>>,
+    pub routing_table: Mutex<RoutingTable>,
 }
 
 impl Node {
     pub async fn new(addr: SocketAddr, bootstrap_addr: Option<&str>) -> Result<Arc<Mutex<Self>>, Box<dyn std::error::Error>> {
-        let node_id = Self::generate_id().await;
+        let (keypair, node_id, duration) = Self::generate_id().await?;
         let routing_table = Mutex::new(RoutingTable::new(node_id.clone()));
-
-        println!("{}", format!("Generated node ID: {}", node_id.encode_hex::<String>()).green().bold());
 
         // Create a node instance within an Arc<Mutex<>> wrapper
         let node = Arc::new(Mutex::new(Node {
-            id: node_id.clone(),
-            addr: addr,
+            keypair,
+            id: node_id,
+            addr,
             storage: Mutex::new(HashMap::new()),
             routing_table,
         }));
+
+
+         // Print out the generated node ID
+        println!("Generated Node ID: {}", hex::encode(&node.lock().await.id));
+        println!("Time taken to generate Node ID: {:.2?}", duration);
 
         // Fetch the bootstrap node's routing table if provided
         if let Some(addr) = bootstrap_addr {
@@ -64,14 +80,25 @@ impl Node {
         Ok(node)
     }
 
-    async fn generate_id() -> Bytes {
-        let mut rng = rand::thread_rng();
-        let mut id = vec![0u8; 20]; // 160 bits
-        rng.fill_bytes(&mut id);
-        Bytes::from(id)
-    }
+    async fn generate_id() -> Result<(signature::Ed25519KeyPair, Bytes, std::time::Duration), Box<dyn std::error::Error>> {
+        let rng = ring_rand::SystemRandom::new();
+        let c1 = C1; // difficulty level: number of leading zero bits
+        let start_time = Instant::now();
 
-    
+        loop {
+            let pkcs8_bytes = signature::Ed25519KeyPair::generate_pkcs8(&rng)
+                .map_err(|_| "Failed to generate pkcs8 bytes")?;
+            let keypair = signature::Ed25519KeyPair::from_pkcs8(pkcs8_bytes.as_ref())
+                .map_err(|_| "Failed to create keypair from pkcs8 bytes")?;
+            let public_key_hash = digest(&SHA256, keypair.public_key().as_ref());
+
+            let node_id = Bytes::from(public_key_hash.as_ref().to_vec());
+            if node_id[0].leading_zeros() >= c1 as u32 {
+                let duration = start_time.elapsed();
+                return Ok((keypair, node_id, duration));
+            }
+        }
+    }
 
     async fn fetch_routing_table(&self, bootstrap_addr: &str) -> Result<(), Box<dyn std::error::Error>> {
         let endpoint = Endpoint::from_shared(format!("http://{}", bootstrap_addr))?;
