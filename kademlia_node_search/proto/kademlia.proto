@@ -10,6 +10,9 @@ message NodeInfo {
 
 message PingRequest {
     string node_address = 1; // The ID of the pinging node
+    int64 timestamp = 2; // Message timestamp to avoid replay attacks
+    bytes signature = 3; // Encrypted Message for man-in-the-middle attacks 
+    bytes sender_public_key = 4; // The Sender Public Key
 }
 
 message PingResponse {

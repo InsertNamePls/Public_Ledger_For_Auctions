@@ -3,7 +3,7 @@ mod routing_table;
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use std::time::Instant;
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use rand_distr::{Distribution, Uniform};
 use tokio::sync::Mutex;
 use bytes::Bytes;
@@ -37,6 +37,8 @@ const TIMEOUT_MAX_ATTEMPTS: u64 = 3;
 const C1: u32 = 14;
 //Number of attempts it takes to log elapsed time
 const LOG_INTERVAL: u64 = 10_000;
+// Replay attack prevention time window
+const REPLAY_WINDOW: i64 = 120;
 pub struct Node {
     pub keypair: signature::Ed25519KeyPair,
     pub id: Bytes,
@@ -75,6 +77,7 @@ impl Node {
 
         Ok(node)
     }
+    
 
     async fn generate_id() -> Result<(signature::Ed25519KeyPair, Bytes, Duration, u64), Box<dyn std::error::Error>> {
         let rng = ring_rand::SystemRandom::new();
@@ -120,7 +123,7 @@ impl Node {
         for attempt in 0..TIMEOUT_MAX_ATTEMPTS {
             println!("{}", format!("Attempt {} to fetch routing table from {}", attempt + 1, bootstrap_addr).yellow());
             
-            let ping_request = Request::new(PingRequest { node_address: bootstrap_addr.to_string() });
+            let ping_request = self.create_ping_request(bootstrap_addr.to_string());
             match timeout(Duration::from_secs(TIMEOUT_TIMER), client.ping(ping_request)).await {
                 Ok(Ok(response)) => {
                     let ping_response = response.into_inner();
@@ -197,6 +200,55 @@ impl Node {
         }
     }
     
+    fn sign_message(&self, message: &[u8]) -> Vec<u8> {
+        self.keypair.sign(message).as_ref().to_vec()
+    }
+
+    fn validate_message(&self, message: &[u8], signature: &[u8], public_key: &[u8]) -> bool {
+        let peer_public_key = signature::UnparsedPublicKey::new(&signature::ED25519, public_key);
+        peer_public_key.verify(message, signature).is_ok()
+    }
+
+    fn create_ping_request(&self, addr: String) -> PingRequest {
+        let node_address = addr;
+        let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as i64;
+        let message = format!("{}{}", node_address, timestamp).into_bytes();
+        let signature = self.sign_message(&message);
+        let public_key = self.keypair.public_key().as_ref().to_vec();
+
+        PingRequest {
+            node_address,
+            timestamp,
+            signature,
+            sender_public_key : public_key,
+        }
+    }
+
+    async fn handle_ping(&self, request: Request<PingRequest>) -> Result<Response<PingResponse>, Status> {
+        let ping_request = request.into_inner();
+        let node_address = ping_request.node_address;
+        let timestamp = ping_request.timestamp;
+        let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as i64;
+
+        // Ensure the timestamp is within REPLAY_WINDOW of the current time to prevent replay attacks
+        if (current_time - timestamp).abs() > REPLAY_WINDOW {
+            return Err(Status::unauthenticated("Invalid timestamp"));
+        }
+
+        let message = format!("{}{}", node_address, timestamp).into_bytes();
+        let sender_public_key = ping_request.sender_public_key.as_ref();
+
+        // Ensure the signature is valid to prevent impersonation
+        if self.validate_message(&message, &ping_request.signature, sender_public_key) {
+            let response = PingResponse {
+                is_online: true,
+                node_id: self.id.clone().to_vec(),
+            };
+            Ok(Response::new(response))
+        } else {
+            Err(Status::unauthenticated("Invalid signature"))
+        }
+    }
 
 }
 
@@ -208,11 +260,8 @@ impl Kademlia for Arc<Mutex<Node>> {
     async fn ping(&self, request: Request<PingRequest>) -> Result<Response<PingResponse>, Status> {
         let node = self.lock().await;
         println!("{}", format!("Received ping request: {:?}", request).blue());
-        let response = PingResponse {
-            is_online: true,
-            node_id: node.id.clone().to_vec(), // Ensure proper Bytes to Vec<u8> conversion
-        };
-        Ok(Response::new(response))
+   
+        node.handle_ping(request).await
     }
 
     // The store method is used to store a key-value pair across the entire network.

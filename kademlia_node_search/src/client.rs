@@ -21,14 +21,6 @@ pub async fn run_client(target: &str, command: &str) -> Result<(), Box<dyn std::
     let key = Bytes::from(user_input_bytes);
 
     match command {
-        "ping" => {
-            println!("Sending Ping Request");
-            let request = Request::new(PingRequest {
-                node_address: "client_node_id".into(), // Example node ID, adjust as needed
-            });
-            let response = client.ping(request).await?;
-            println!("Received ping response: {:?}", response.into_inner());
-        },
         "store" => {
             println!("Sending Store request with key: {}", user_input.trim());
             let value = generate_bytes(10).to_vec();  // Generate a random value
