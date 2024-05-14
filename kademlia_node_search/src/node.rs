@@ -35,9 +35,9 @@ const TIMEOUT_TIMER: u64 = 3;
 const TIMEOUT_MAX_ATTEMPTS: u64 = 3;
 //Leading zero bits for node ID generation
 const C1: u32 = 14;
-//Number of attempts it takes to log elapsed time
+//Number of attempts it takes to log elapsed time for node generation
 const LOG_INTERVAL: u64 = 10_000;
-// Replay attack prevention time window
+// Replay attack prevention time window in seconds
 const REPLAY_WINDOW: i64 = 120;
 pub struct Node {
     pub keypair: signature::Ed25519KeyPair,

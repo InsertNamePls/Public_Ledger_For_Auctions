@@ -1,6 +1,12 @@
 # Kademlia DHT Node in Rust
 This component implements a basic version of a Kademlia Distributed Hash Table (DHT) node using Rust and gRPC. Kademlia is a decentralized peer-to-peer network protocol that enables nodes in the network to store and retrieve data in a distributed manner. This implementation focuses on the core functionalities of the Kademlia protocol, including node discovery, data storage, and retrieval.
 
+## TOOD 
+
+- [ ] Add Message Signing and Verification with verification for remaining requests (all but ping)
+- [ ] Diversify Node Selection for Routing Table
+- [ ] Reputation Systems for Node Trustworthiness
+
 ## Features
 - **PING**: Probes a node to check its online status.
 - **STORE**: Instructs a node to store a key-value pair.
