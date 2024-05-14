@@ -13,21 +13,14 @@ use tonic::{Request, Response, Status};
 use crate::kademlia::kademlia_client::KademliaClient;
 use crate::kademlia::kademlia_server::{Kademlia, KademliaServer};
 use crate::kademlia::{NodeInfo as ProtoNodeInfo,PingRequest, PingResponse, StoreRequest, StoreResponse, FindNodeRequest, FindNodeResponse, FindValueRequest, FindValueResponse};
-use crate::node;
-use rand::{thread_rng, RngCore};
-use tokio::time::{self, Duration,timeout};
+use tokio::time::{Duration,timeout};
 use self::routing_table::NodeInfo;
 use rand::SeedableRng;
 use colored::*; 
 use hex::ToHex; 
 use ring::{rand as ring_rand, signature};
 use ring::digest::{digest, SHA256};
-use ring::rand::SecureRandom;
 use ring::signature::KeyPair;
-
-use sha2::{Sha256, Digest};
-use rand::rngs::OsRng;
-
 
 
 
@@ -41,7 +34,9 @@ const TIMEOUT_TIMER: u64 = 3;
 //Maximum number of attempts for each request
 const TIMEOUT_MAX_ATTEMPTS: u64 = 3;
 //Leading zero bits for node ID generation
-const C1: u32 = 8;
+const C1: u32 = 14;
+//Number of attempts it takes to log elapsed time
+const LOG_INTERVAL: u64 = 10_000;
 pub struct Node {
     pub keypair: signature::Ed25519KeyPair,
     pub id: Bytes,
@@ -52,7 +47,7 @@ pub struct Node {
 
 impl Node {
     pub async fn new(addr: SocketAddr, bootstrap_addr: Option<&str>) -> Result<Arc<Mutex<Self>>, Box<dyn std::error::Error>> {
-        let (keypair, node_id, duration) = Self::generate_id().await?;
+        let (keypair, node_id, duration, attempts) = Self::generate_id().await?;
         let routing_table = Mutex::new(RoutingTable::new(node_id.clone()));
 
         // Create a node instance within an Arc<Mutex<>> wrapper
@@ -68,6 +63,7 @@ impl Node {
          // Print out the generated node ID
         println!("Generated Node ID: {}", hex::encode(&node.lock().await.id));
         println!("Time taken to generate Node ID: {:.2?}", duration);
+        println!("Number of attempts: {}", attempts);
 
         // Fetch the bootstrap node's routing table if provided
         if let Some(addr) = bootstrap_addr {
@@ -80,12 +76,15 @@ impl Node {
         Ok(node)
     }
 
-    async fn generate_id() -> Result<(signature::Ed25519KeyPair, Bytes, std::time::Duration), Box<dyn std::error::Error>> {
+    async fn generate_id() -> Result<(signature::Ed25519KeyPair, Bytes, Duration, u64), Box<dyn std::error::Error>> {
         let rng = ring_rand::SystemRandom::new();
-        let c1 = C1; // difficulty level: number of leading zero bits
+        let c1 = C1; // Example difficulty level: number of leading zero bits
         let start_time = Instant::now();
+        let mut attempts = 0;
+        let attempt_log_interval = LOG_INTERVAL; // Print status every 10,000 attempts
 
         loop {
+            attempts += 1;
             let pkcs8_bytes = signature::Ed25519KeyPair::generate_pkcs8(&rng)
                 .map_err(|_| "Failed to generate pkcs8 bytes")?;
             let keypair = signature::Ed25519KeyPair::from_pkcs8(pkcs8_bytes.as_ref())
@@ -93,9 +92,22 @@ impl Node {
             let public_key_hash = digest(&SHA256, keypair.public_key().as_ref());
 
             let node_id = Bytes::from(public_key_hash.as_ref().to_vec());
-            if node_id[0].leading_zeros() >= c1 as u32 {
+
+            if attempts % attempt_log_interval == 0 {
+                let elapsed = start_time.elapsed();
+                println!("Attempts: {}, Elapsed time: {:.2?} seconds", attempts, elapsed);
+            }
+
+            // Check if the first `c1` bits are zero (this implementation only works if c1 < 16)
+            let valid = if c1 <= 8 {
+                node_id[0] >> (8 - c1) == 0
+            } else {
+                node_id[0] == 0 && node_id[1] >> (16 - c1) == 0
+            };
+
+            if valid {
                 let duration = start_time.elapsed();
-                return Ok((keypair, node_id, duration));
+                return Ok((keypair, node_id, duration, attempts));
             }
         }
     }
