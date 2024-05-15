@@ -12,8 +12,8 @@ mod config;
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let matches = Command::new("Kademlia Network")
         .version("1.0")
-        .author("Author Name <author@example.com>")
-        .about("Runs a Kademlia node as either a server or a client")
+        .author("Eduardo Correia <eduardo.mmd.correia@gmail.com>")
+        .about("Runs an S/Kademlia node as either a server or a client")
         .subcommand(Command::new("server")
             .about("Runs in server mode")
             .arg(Arg::new("addr")

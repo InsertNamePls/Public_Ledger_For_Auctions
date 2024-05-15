@@ -1,6 +1,7 @@
 mod routing_table;
 mod request_handler;
 mod crypto;
+mod client;
 
 use std::collections::HashMap;
 use std::net::SocketAddr;
@@ -12,6 +13,7 @@ use bytes::Bytes;
 use routing_table::RoutingTable;
 use request_handler::RequestHandler;
 use crypto::Crypto;
+use client::Client;
 use tonic::transport::{Endpoint, Server};
 use tonic::{Request, Response, Status};
 use crate::kademlia::kademlia_client::KademliaClient;
@@ -109,7 +111,7 @@ impl Node {
         for attempt in 0..TIMEOUT_MAX_ATTEMPTS {
             println!("{}", format!("Attempt {} to fetch routing table from {}", attempt + 1, bootstrap_addr).yellow());
             
-            let ping_request = self.create_ping_request(bootstrap_addr.to_string());
+            let ping_request = Client::create_ping_request(&self.keypair,bootstrap_addr.to_string());
             match timeout(Duration::from_secs(TIMEOUT_TIMER), client.ping(ping_request)).await {
                 Ok(Ok(response)) => {
                     let ping_response = response.into_inner();
@@ -185,25 +187,6 @@ impl Node {
             node.lock().await.routing_table.lock().await.print_table();
         }
     }
-    
-    
-
-    fn create_ping_request(&self, addr: String) -> PingRequest {
-        let node_address = addr;
-        let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as i64;
-        let message = format!("{}{}", node_address, timestamp).into_bytes();
-        let signature = Crypto::sign_message(&self.keypair, &message); // Pass a reference to the keypair
-        let public_key = self.keypair.public_key().as_ref().to_vec();
-
-        PingRequest {
-            node_address,
-            timestamp,
-            signature,
-            sender_public_key : public_key,
-        }
-    }
-
-
 
 }
 

@@ -1,8 +1,17 @@
+use std::time::{SystemTime, UNIX_EPOCH};
 use ring::{rand as ring_rand, signature};
+
+use crate::config::REPLAY_WINDOW;
 
 pub struct Crypto {}
 
 impl Crypto {
+    pub fn validate_request(timestamp: i64,message: &[u8], signature: &[u8], public_key: &[u8]) -> bool{
+        return 
+            Crypto::validate_message_timestamp(timestamp) &&
+            Crypto::validate_message_authenticity(message, signature, public_key);
+    }
+
     pub fn create_keypair() -> Result<signature::Ed25519KeyPair, &'static str> {
         let rng = ring_rand::SystemRandom::new();
 
@@ -18,7 +27,13 @@ impl Crypto {
         keypair.sign(message).as_ref().to_vec()
     }
 
-    pub fn validate_message(message: &[u8], signature: &[u8], public_key: &[u8]) -> bool {
+    pub fn validate_message_timestamp(timestamp: i64) -> bool {
+        let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as i64;
+        // Ensure the timestamp is within REPLAY_WINDOW of the current time to prevent replay attacks
+        return current_time - timestamp.abs() <= REPLAY_WINDOW;
+    }
+
+    pub fn validate_message_authenticity(message: &[u8], signature: &[u8], public_key: &[u8]) -> bool {
         let peer_public_key = signature::UnparsedPublicKey::new(&signature::ED25519, public_key);
         peer_public_key.verify(message, signature).is_ok()
     }

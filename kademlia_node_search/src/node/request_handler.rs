@@ -1,9 +1,7 @@
 use std::net::SocketAddr;
 use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::Mutex;
 use tonic::{Request, Response, Status};
-use crate::config;
 use crate::kademlia::kademlia_client::KademliaClient;
 use crate::node::Node;
 use crate::kademlia::{NodeInfo as ProtoNodeInfo,PingRequest, PingResponse, StoreRequest, StoreResponse, FindNodeRequest, FindNodeResponse, FindValueRequest, FindValueResponse};
@@ -12,8 +10,6 @@ use hex::ToHex;
 use colored::*;
 use super::routing_table::NodeInfo;
 
-//Import Constants
-use config::REPLAY_WINDOW;
 use super::crypto::Crypto;
 
 pub struct RequestHandler;
@@ -23,19 +19,13 @@ impl RequestHandler {
         let ping_request = request.into_inner();
         let node_address = ping_request.node_address;
         let timestamp = ping_request.timestamp;
-        let current_time = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as i64;
-
-        // Ensure the timestamp is within REPLAY_WINDOW of the current time to prevent replay attacks
-        if (current_time - timestamp).abs() > REPLAY_WINDOW {
-            return Err(Status::unauthenticated("Invalid timestamp"));
-        }
-
+        //Message is always the concatenation of the node's address and the timestamp
         let message = format!("{}{}", node_address, timestamp).into_bytes();
         let sender_public_key = ping_request.sender_public_key.as_ref();
 
-        let node = node.lock().await;
-        // Ensure the signature is valid to prevent impersonation
-        if Crypto::validate_message(&message, &ping_request.signature, sender_public_key) {
+        // Ensure the signature is valid to prevent impersonation and replay attacks
+        if Crypto::validate_request(timestamp, &message, &ping_request.signature, sender_public_key) {
+            let node = node.lock().await;
             let response = PingResponse {
                 is_online: true,
                 node_id: node.id.clone().to_vec(),
