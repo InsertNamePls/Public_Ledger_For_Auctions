@@ -103,30 +103,35 @@ impl Node {
         }
     }
 
-    async fn fetch_routing_table(&self, bootstrap_addr: &str) -> Result<(), Box<dyn std::error::Error>> {
-        let endpoint = Endpoint::from_shared(format!("http://{}", bootstrap_addr))?;
-        let channel = endpoint.connect().await?;
-        let mut client = KademliaClient::new(channel);
-        
+    async fn fetch_routing_table(&self, target_addr: &str) -> Result<(), Box<dyn std::error::Error>> {
         for attempt in 0..TIMEOUT_MAX_ATTEMPTS {
-            println!("{}", format!("Attempt {} to fetch routing table from {}", attempt + 1, bootstrap_addr).yellow());
-            
-            let ping_request = Client::create_ping_request(&self.keypair,bootstrap_addr.to_string());
-            match timeout(Duration::from_secs(TIMEOUT_TIMER), client.ping(ping_request)).await {
-                Ok(Ok(response)) => {
-                    let ping_response = response.into_inner();
-                    println!("{}", format!("Received ping response: {:?}", ping_response).green());
-                    let find_node_request = Request::new(FindNodeRequest {
-                        requester_node_id: self.id.to_vec(),
-                        requester_node_address: self.addr.to_string(),
-                        target_node_id: ping_response.node_id,
-                    });
+            println!("{}", format!("Attempt {} to fetch routing table from {}", attempt + 1, target_addr).yellow());
 
-                    match timeout(Duration::from_secs(TIMEOUT_TIMER), client.find_node(find_node_request)).await {
+            let ping_response = timeout(Duration::from_secs(TIMEOUT_TIMER), 
+            Client::send_ping_request(
+                &self.keypair, 
+                self.addr.to_string(), 
+                target_addr.to_string())
+            ).await;
+
+            match ping_response {
+                Ok(Ok(ping_response)) => {
+                    println!("{}", format!("Received ping response: {:?}", ping_response).green());
+
+                    let find_node_response = timeout(
+                        Duration::from_secs(TIMEOUT_TIMER),
+                        Client::send_find_node_request(
+                            ping_response.node_id,
+                            target_addr.to_string(),
+                            self.id.to_vec(),
+                            self.addr.to_string(),
+                        )
+                    ).await;
+
+                    match find_node_response {
                         Ok(Ok(find_response)) => {
                             println!("{}", format!("Received find_node response: {:?}", find_response).green());
-                            let response = find_response.into_inner();
-                            self.update_routing_table(RoutingTable::from_proto_nodes(response.nodes)).await;
+                            self.update_routing_table(RoutingTable::from_proto_nodes(find_response.nodes)).await;
                             return Ok(());
                         },
                         Ok(Err(e)) => eprintln!("{}", format!("Failed to receive find_node response: {}", e).red()),
@@ -139,6 +144,7 @@ impl Node {
         }
         Err(Box::new(std::io::Error::new(std::io::ErrorKind::Other, "Failed to fetch routing table after 3 attempts")))
     }
+
 
     async fn update_routing_table(&self, nodes: Vec<NodeInfo>) {
         let mut routing_table = self.routing_table.lock().await;
