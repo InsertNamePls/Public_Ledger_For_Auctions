@@ -7,6 +7,7 @@ mod kademlia {
 
 mod node;
 mod client;
+mod config;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let matches = Command::new("Kademlia Network")

@@ -3,6 +3,7 @@ use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::Mutex;
 use tonic::{Request, Response, Status};
+use crate::config;
 use crate::kademlia::kademlia_client::KademliaClient;
 use crate::node::Node;
 use crate::kademlia::{NodeInfo as ProtoNodeInfo,PingRequest, PingResponse, StoreRequest, StoreResponse, FindNodeRequest, FindNodeResponse, FindValueRequest, FindValueResponse};
@@ -12,7 +13,8 @@ use colored::*;
 use super::routing_table::NodeInfo;
 
 //Import Constants
-use super::config::REPLAY_WINDOW;
+use config::REPLAY_WINDOW;
+use super::crypto::Crypto;
 
 pub struct RequestHandler;
 
@@ -33,7 +35,7 @@ impl RequestHandler {
 
         let node = node.lock().await;
         // Ensure the signature is valid to prevent impersonation
-        if node.validate_message(&message, &ping_request.signature, sender_public_key) {
+        if Crypto::validate_message(&message, &ping_request.signature, sender_public_key) {
             let response = PingResponse {
                 is_online: true,
                 node_id: node.id.clone().to_vec(),

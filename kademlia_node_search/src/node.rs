@@ -1,6 +1,6 @@
 mod routing_table;
 mod request_handler;
-mod config;
+mod crypto;
 
 use std::collections::HashMap;
 use std::net::SocketAddr;
@@ -11,6 +11,7 @@ use tokio::sync::Mutex;
 use bytes::Bytes;
 use routing_table::RoutingTable;
 use request_handler::RequestHandler;
+use crypto::Crypto;
 use tonic::transport::{Endpoint, Server};
 use tonic::{Request, Response, Status};
 use crate::kademlia::kademlia_client::KademliaClient;
@@ -20,11 +21,11 @@ use tokio::time::{Duration, timeout};
 use self::routing_table::NodeInfo;
 use rand::SeedableRng;
 use colored::*;
-use ring::{rand as ring_rand, signature};
+use ring::{signature};
 use ring::digest::{digest, SHA256};
 use ring::signature::KeyPair;
 //Config Constants
-use crate::node::config::{REFRESH_TIMER_UPPER,REFRESH_TIMER_LOWER,TIMEOUT_TIMER,TIMEOUT_MAX_ATTEMPTS,C1,LOG_INTERVAL};
+use crate::config::{C1, LOG_INTERVAL, REFRESH_TIMER_LOWER, REFRESH_TIMER_UPPER, TIMEOUT_MAX_ATTEMPTS, TIMEOUT_TIMER};
 
 pub struct Node {
     pub keypair: signature::Ed25519KeyPair,
@@ -67,18 +68,16 @@ impl Node {
     
 
     async fn generate_id() -> Result<(signature::Ed25519KeyPair, Bytes, Duration, u64), Box<dyn std::error::Error>> {
-        let rng = ring_rand::SystemRandom::new();
         let c1 = C1; // Example difficulty level: number of leading zero bits
         let start_time = Instant::now();
         let mut attempts = 0;
         let attempt_log_interval = LOG_INTERVAL; // Print status every 10,000 attempts
 
+        println!("Generating node ID with {} leading zero bits", c1);
+
         loop {
             attempts += 1;
-            let pkcs8_bytes = signature::Ed25519KeyPair::generate_pkcs8(&rng)
-                .map_err(|_| "Failed to generate pkcs8 bytes")?;
-            let keypair = signature::Ed25519KeyPair::from_pkcs8(pkcs8_bytes.as_ref())
-                .map_err(|_| "Failed to create keypair from pkcs8 bytes")?;
+            let keypair = Crypto::create_keypair()?;
             let public_key_hash = digest(&SHA256, keypair.public_key().as_ref());
 
             let node_id = Bytes::from(public_key_hash.as_ref().to_vec());
@@ -187,20 +186,13 @@ impl Node {
         }
     }
     
-    fn sign_message(&self, message: &[u8]) -> Vec<u8> {
-        self.keypair.sign(message).as_ref().to_vec()
-    }
-
-    fn validate_message(&self, message: &[u8], signature: &[u8], public_key: &[u8]) -> bool {
-        let peer_public_key = signature::UnparsedPublicKey::new(&signature::ED25519, public_key);
-        peer_public_key.verify(message, signature).is_ok()
-    }
+    
 
     fn create_ping_request(&self, addr: String) -> PingRequest {
         let node_address = addr;
         let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as i64;
         let message = format!("{}{}", node_address, timestamp).into_bytes();
-        let signature = self.sign_message(&message);
+        let signature = Crypto::sign_message(&self.keypair, &message); // Pass a reference to the keypair
         let public_key = self.keypair.public_key().as_ref().to_vec();
 
         PingRequest {
