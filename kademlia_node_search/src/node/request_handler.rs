@@ -11,8 +11,8 @@ use hex::ToHex;
 use colored::*;
 use super::routing_table::NodeInfo;
 
-// Constants
-const REPLAY_WINDOW: i64 = 120;
+//Import Constants
+use super::config::REPLAY_WINDOW;
 
 pub struct RequestHandler;
 

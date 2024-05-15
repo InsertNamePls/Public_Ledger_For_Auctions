@@ -1,5 +1,6 @@
 mod routing_table;
-pub mod request_handler; // Add this line to declare the submodule
+mod request_handler;
+mod config;
 
 use std::collections::HashMap;
 use std::net::SocketAddr;
@@ -15,31 +16,16 @@ use tonic::{Request, Response, Status};
 use crate::kademlia::kademlia_client::KademliaClient;
 use crate::kademlia::kademlia_server::{Kademlia, KademliaServer};
 use crate::kademlia::{PingRequest, PingResponse, StoreRequest, StoreResponse, FindNodeRequest, FindNodeResponse, FindValueRequest, FindValueResponse};
-use tokio::time::{Duration,timeout};
+use tokio::time::{Duration, timeout};
 use self::routing_table::NodeInfo;
 use rand::SeedableRng;
-use colored::*; 
+use colored::*;
 use ring::{rand as ring_rand, signature};
 use ring::digest::{digest, SHA256};
 use ring::signature::KeyPair;
+//Config Constants
+use crate::node::config::{REFRESH_TIMER_UPPER,REFRESH_TIMER_LOWER,TIMEOUT_TIMER,TIMEOUT_MAX_ATTEMPTS,C1,LOG_INTERVAL};
 
-
-
-
-//Upper limit for random routing table refresh
-const REFRESH_TIMER_UPPER: u64 = 20;
-//Lower limit for random routing table refresh
-const REFRESH_TIMER_LOWER: u64 = 5;
-//Timeout for each request
-const TIMEOUT_TIMER: u64 = 3;
-//Maximum number of attempts for each request
-const TIMEOUT_MAX_ATTEMPTS: u64 = 3;
-//Leading zero bits for node ID generation
-const C1: u32 = 14;
-//Number of attempts it takes to log elapsed time for node generation
-const LOG_INTERVAL: u64 = 10_000;
-// Replay attack prevention time window in seconds
-const REPLAY_WINDOW: i64 = 120;
 pub struct Node {
     pub keypair: signature::Ed25519KeyPair,
     pub id: Bytes,
