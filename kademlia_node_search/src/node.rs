@@ -114,6 +114,7 @@ impl Node {
         println!("{}", format!("Received ping response: {:?}", ping_response).green());
 
         let find_node_response = client.send_find_node_request(
+            &self.keypair,
             ping_response.node_id,
             target_addr.to_string(),
             self.id.to_vec(),

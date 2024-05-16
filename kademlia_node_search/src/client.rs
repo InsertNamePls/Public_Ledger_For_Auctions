@@ -1,8 +1,6 @@
 use rand::RngCore;
 use bytes::Bytes;
-use tonic::Request;
 use crate::kademlia::kademlia_client::KademliaClient;
-use crate::kademlia::{StoreRequest,FindValueResponse,FindValueRequest};
 
 pub async fn run_client(target: &str, command: &str) -> Result<(), Box<dyn std::error::Error>> {
     let endpoint = format!("http://{}", target);
@@ -17,34 +15,10 @@ pub async fn run_client(target: &str, command: &str) -> Result<(), Box<dyn std::
 
     match command {
         "store" => {
-            println!("Sending Store request with key: {}", user_input.trim());
-            let value = generate_bytes(10).to_vec();  // Generate a random value
-            let store_request = StoreRequest { 
-                key: key.to_vec(), 
-                value 
-            };
-
-            let request = Request::new(store_request);
-            let response = client.store(request).await?;
-            println!("Store response: {:?}", response.into_inner());
+            
         },
         "find_value" => {
-            println!("Sending Find Value request for key: {}", user_input.trim());
-            let find_value_request = FindValueRequest { 
-                key: key.to_vec(),
-            };
-
-            let request = Request::new(find_value_request);
-            let response = client.find_value(request).await?;
-            match response.into_inner() {
-                FindValueResponse { value, nodes } => {
-                    if !value.is_empty() {
-                        println!("Value found: {:?}", value);
-                    } else {
-                        println!("Value not found, closest nodes: {:?}", nodes);
-                    }
-                }
-            }
+           
         },
         _ => {
             println!("Unsupported command '{}'", command);

@@ -8,6 +8,7 @@ use crate::kademlia::{NodeInfo as ProtoNodeInfo,PingRequest, PingResponse, Store
 use bytes::Bytes;
 use hex::ToHex;
 use colored::*;
+use super::client::Client;
 use super::routing_table::NodeInfo;
 
 use super::crypto::Crypto;
@@ -68,10 +69,7 @@ impl RequestHandler {
 
             for node_info in closest_nodes.iter() {
                 let client_addr = node_info.addr.to_string();
-                let forward_store_request = StoreRequest {
-                    key: store_request.key.clone(),
-                    value: store_request.value.clone(),
-                };
+                let forward_store_request = Client::create_store_node_request(&node.keypair, key.to_vec(),value.to_vec());
 
                 // Skip sending to self
                 if client_addr != node.addr.to_string() {
