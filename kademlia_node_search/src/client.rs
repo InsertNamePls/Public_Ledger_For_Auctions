@@ -1,63 +1,71 @@
 use rand::RngCore;
-use rand::{distributions::Alphanumeric, Rng};
-use rand_distr::{Poisson, Distribution};
-use tonic::{Request, Code, Status};
-use std::time::Duration;
-use tokio::time::sleep;
 use bytes::Bytes;
-use crate::kademlia::kademlia_client::KademliaClient;
-use crate::kademlia::{PingRequest, StoreRequest, FindNodeRequest, FindNodeResponse, StoreResponse, FindValueRequest, FindValueResponse};
-use std::env;
+use ring::signature::KeyPair;
+use crate::node::crypto::Crypto;
+use crate::node::client::Client;
+use tonic::transport::Channel;
 
 pub async fn run_client(target: &str, command: &str) -> Result<(), Box<dyn std::error::Error>> {
-    let endpoint = format!("http://{}", target);
-    let mut client = KademliaClient::connect(endpoint).await?;
-
-    // Collect user input for the key
-    println!("Enter a key (text) for the operation:");
-    let mut user_input = String::new();
-    std::io::stdin().read_line(&mut user_input)?;
-    let user_input_bytes = user_input.trim().to_string().into_bytes();
-    let key = Bytes::from(user_input_bytes);
+    // Generate keypair
+    let keypair = Crypto::create_keypair()?;
 
     match command {
-        "ping" => {
-            println!("Sending Ping Request");
-            let request = Request::new(PingRequest {
-                node_address: "client_node_id".into(), // Example node ID, adjust as needed
-            });
-            let response = client.ping(request).await?;
-            println!("Received ping response: {:?}", response.into_inner());
-        },
         "store" => {
-            println!("Sending Store request with key: {}", user_input.trim());
-            let value = generate_bytes(10).to_vec();  // Generate a random value
-            let store_request = StoreRequest { 
-                key: key.to_vec(), 
-                value 
-            };
+            // Collect user input for the key and value
+            println!("Enter a key (text) for the store operation:");
+            let mut key_input = String::new();
+            std::io::stdin().read_line(&mut key_input)?;
+            let key_bytes = key_input.trim().to_string().into_bytes();
+            let key = Bytes::from(key_bytes);
 
-            let request = Request::new(store_request);
-            let response = client.store(request).await?;
-            println!("Store response: {:?}", response.into_inner());
+            println!("Enter a value (text) for the store operation:");
+            let mut value_input = String::new();
+            std::io::stdin().read_line(&mut value_input)?;
+            let value_bytes = value_input.trim().to_string().into_bytes();
+            let value = Bytes::from(value_bytes);
+
+            let store_request = Client::create_store_node_request(&keypair, key.to_vec(), value.to_vec());
+            let response = Client::send_store_request(store_request, target.to_string()).await?;
+
+            println!("Store response: {:?}", response);
         },
         "find_value" => {
-            println!("Sending Find Value request for key: {}", user_input.trim());
-            let find_value_request = FindValueRequest { 
-                key: key.to_vec(),
-            };
+            // Collect user input for the key
+            println!("Enter a key (text) for the find_value operation:");
+            let mut key_input = String::new();
+            std::io::stdin().read_line(&mut key_input)?;
+            let key_bytes = key_input.trim().to_string().into_bytes();
+            let key = Bytes::from(key_bytes);
 
-            let request = Request::new(find_value_request);
-            let response = client.find_value(request).await?;
-            match response.into_inner() {
-                FindValueResponse { value, nodes } => {
-                    if !value.is_empty() {
-                        println!("Value found: {:?}", value);
-                    } else {
-                        println!("Value not found, closest nodes: {:?}", nodes);
-                    }
-                }
-            }
+            let find_value_request = Client::create_find_value_request(&keypair, key.to_vec());
+            let response = Client::send_find_value_request(find_value_request, target.to_string()).await?;
+
+            println!("Find value response: {:?}", response);
+        },
+        "find_node" => {
+            // Collect user input for the target node ID
+            println!("Enter a target node ID (hex) for the find_node operation:");
+            let mut target_node_id_input = String::new();
+            std::io::stdin().read_line(&mut target_node_id_input)?;
+            let target_node_id_bytes = hex::decode(target_node_id_input.trim()).expect("Invalid hex input for target node ID");
+            let target_node_id = Bytes::from(target_node_id_bytes);
+
+            let find_node_request = Client::create_find_node_request(
+                &keypair,
+                keypair.public_key().as_ref().to_vec(),
+                "127.0.0.1:10020".to_string(),
+                target_node_id.to_vec()
+            );
+
+            let response = Client::send_find_node_request(find_node_request, target.to_string()).await?;
+
+            println!("Find node response: {:?}", response);
+        },
+        "ping" => {
+            let ping_request = Client::create_ping_request(&keypair, "127.0.0.1:10020".to_string());
+            let response = Client::send_ping_request(ping_request, target.to_string()).await?;
+
+            println!("Ping response: {:?}", response);
         },
         _ => {
             println!("Unsupported command '{}'", command);

@@ -10,6 +10,9 @@ message NodeInfo {
 
 message PingRequest {
     string node_address = 1; // The ID of the pinging node
+    int64 timestamp = 2; // Message timestamp to avoid replay attacks
+    bytes signature = 3; // Encrypted Message for man-in-the-middle attacks 
+    bytes sender_public_key = 4; // The Sender Public Key
 }
 
 message PingResponse {
@@ -20,6 +23,9 @@ message PingResponse {
 message StoreRequest {
     bytes key = 1; // Key of the key-value pair
     bytes value = 2; // Value of the key-value pair
+    int64 timestamp = 3; // Message timestamp to avoid replay attacks
+    bytes signature = 4; // Encrypted Message for man-in-the-middle attacks 
+    bytes sender_public_key = 5; // The Sender Public Key
 }
 
 message StoreResponse {
@@ -30,6 +36,9 @@ message FindNodeRequest {
     bytes requesterNodeId = 1; // ID of the node requesting
     string requesterNodeAddress = 2; // Address of the node requesting
     bytes targetNodeId = 3; // ID of the node being searched for
+    int64 timestamp = 4; // Message timestamp to avoid replay attacks
+    bytes signature = 5; // Encrypted Message for man-in-the-middle attacks 
+    bytes sender_public_key = 6; // The Sender Public Key
 }
 
 message FindNodeResponse {
@@ -38,6 +47,9 @@ message FindNodeResponse {
 
 message FindValueRequest {
     bytes key = 1; // Key for which the value is being searched
+    int64 timestamp = 2; // Message timestamp to avoid replay attacks
+    bytes signature = 3; // Encrypted Message for man-in-the-middle attacks 
+    bytes sender_public_key = 4; // The Sender Public Key
 }
 
 message FindValueResponse {
