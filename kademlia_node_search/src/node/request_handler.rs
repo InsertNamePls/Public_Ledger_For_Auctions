@@ -2,7 +2,6 @@ use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tonic::{Request, Response, Status};
-use crate::kademlia::kademlia_client::KademliaClient;
 use crate::node::Node;
 use crate::kademlia::{NodeInfo as ProtoNodeInfo,PingRequest, PingResponse, StoreRequest, StoreResponse, FindNodeRequest, FindNodeResponse, FindValueRequest, FindValueResponse};
 use bytes::Bytes;
@@ -74,10 +73,7 @@ impl RequestHandler {
                 // Skip sending to self
                 if client_addr != node.addr.to_string() {
                     tokio::spawn(async move {
-                        if let Ok(mut client) = KademliaClient::connect(format!("http://{}", client_addr)).await {
-                            let request: Request<StoreRequest> = Request::new(forward_store_request);
-                            let _ = client.store(request).await;
-                        }
+                        Client::send_store_request(forward_store_request,client_addr).await;
                     });
                 }
             }

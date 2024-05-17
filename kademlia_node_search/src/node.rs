@@ -1,7 +1,7 @@
 mod routing_table;
 mod request_handler;
-mod crypto;
-mod client;
+pub mod crypto;
+pub mod client;
 
 use std::collections::HashMap;
 use std::net::SocketAddr;
@@ -26,7 +26,7 @@ use ring::{signature};
 use ring::digest::{digest, SHA256};
 use ring::signature::KeyPair;
 //Config Constants
-use crate::config::{C1, LOG_INTERVAL, REFRESH_TIMER_LOWER, REFRESH_TIMER_UPPER, TIMEOUT_MAX_ATTEMPTS, TIMEOUT_TIMER};
+use crate::config::{C1, LOG_INTERVAL, REFRESH_TIMER_LOWER, REFRESH_TIMER_UPPER};
 
 pub struct Node {
     pub keypair: signature::Ed25519KeyPair,
@@ -103,22 +103,21 @@ impl Node {
     }
 
     async fn fetch_routing_table(&self, target_addr: &str) -> Result<(), Box<dyn std::error::Error>> {
-        let client = Client;
-
-        let ping_response = client.send_ping_request(
-            &self.keypair,
-            self.addr.to_string(),
-            target_addr.to_string()
-        ).await?;
+        let ping_request = Client::create_ping_request(&self.keypair, self.addr.to_string());
+        let ping_response = Client::send_ping_request(ping_request, target_addr.to_string()).await?;
 
         println!("{}", format!("Received ping response: {:?}", ping_response).green());
 
-        let find_node_response = client.send_find_node_request(
+        let find_node_request = Client::create_find_node_request(
             &self.keypair,
-            ping_response.node_id,
-            target_addr.to_string(),
             self.id.to_vec(),
-            self.addr.to_string()
+            self.addr.to_string(),
+            ping_response.node_id.to_vec()
+        );
+
+        let find_node_response = Client::send_find_node_request(
+            find_node_request,
+            target_addr.to_string()
         ).await?;
 
         println!("{}", format!("Received find_node response: {:?}", find_node_response).green());
