@@ -1,9 +1,7 @@
 use rand::RngCore;
 use bytes::Bytes;
-use ring::signature::KeyPair;
 use crate::node::crypto::Crypto;
 use crate::node::client::Client;
-use tonic::transport::Channel;
 
 pub async fn run_client(target: &str, command: &str) -> Result<(), Box<dyn std::error::Error>> {
     // Generate keypair

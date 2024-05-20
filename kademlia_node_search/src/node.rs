@@ -6,7 +6,7 @@ pub mod client;
 use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
-use std::time::{Instant};
+use std::time::Instant;
 use rand_distr::{Distribution, Uniform};
 use tokio::sync::Mutex;
 use bytes::Bytes;
@@ -39,7 +39,7 @@ pub struct Node {
 }
 
 impl Node {
-    pub async fn new(addr: SocketAddr, bootstrap_addr: Option<&str>) -> Result<Arc<Mutex<Self>>, Box<dyn std::error::Error>> {
+    pub async fn new(addr: SocketAddr, bootstrap_addr: Option<&str>) -> Result<Arc<Mutex<Self>>, Box<dyn std::error::Error + Send + Sync>> {
         let (keypair, node_id, duration, attempts) = Self::generate_id().await?;
         let routing_table = Mutex::new(RoutingTable::new(node_id.clone()));
 
@@ -54,8 +54,7 @@ impl Node {
             client: Client::new(),
         }));
 
-
-         // Print out the generated node ID
+        // Print out the generated node ID
         println!("Generated Node ID: {}", hex::encode(&node.lock().await.id));
         println!("Time taken to generate Node ID: {:.2?}", duration);
         println!("Number of attempts: {}", attempts);
@@ -71,8 +70,7 @@ impl Node {
         Ok(node)
     }
     
-
-    async fn generate_id() -> Result<(signature::Ed25519KeyPair, Bytes, Duration, u64), Box<dyn std::error::Error>> {
+    async fn generate_id() -> Result<(signature::Ed25519KeyPair, Bytes, Duration, u64), Box<dyn std::error::Error + Send + Sync>> {
         let c1 = C1; // Example difficulty level: number of leading zero bits
         let start_time = Instant::now();
         let mut attempts = 0;
@@ -106,34 +104,39 @@ impl Node {
         }
     }
 
-    async fn fetch_routing_table(&self, target_addr: &str) -> Result<(), Box<dyn std::error::Error>> {
-        let ping_request = self.client.create_ping_request(
-            &self.keypair,
-            self.id.to_vec(),
-            self.addr.to_string()
-        );
-        let ping_response = self.client.send_ping_request(ping_request, target_addr.to_string()).await?;
+    async fn fetch_routing_table(&self, target_addr: &str) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        let ping_request = self.client.create_ping_request(&self.keypair, self.id.to_vec(), self.addr.to_string());
+        match self.client.send_ping_request(ping_request, target_addr.to_string()).await {
+            Ok(ping_response) => {
+                println!("{}", format!("Received ping response: {:?}", ping_response).green());
 
-        println!("{}", format!("Received ping response: {:?}", ping_response).green());
+                let find_node_request = self.client.create_find_node_request(
+                    &self.keypair,
+                    self.id.to_vec(),
+                    self.addr.to_string(),
+                    ping_response.node_id.to_vec()
+                );
 
-        let find_node_request = self.client.create_find_node_request(
-            &self.keypair,
-            self.id.to_vec(),
-            self.addr.to_string(),
-            ping_response.node_id.to_vec()
-        );
-
-        let find_node_response = self.client.send_find_node_request(
-            find_node_request,
-            target_addr.to_string()
-        ).await?;
-
-        println!("{}", format!("Received find_node response: {:?}", find_node_response).green());
-        self.update_routing_table(RoutingTable::from_proto_nodes(find_node_response.nodes)).await;
-        Ok(())
+                match self.client.send_find_node_request(find_node_request, target_addr.to_string()).await {
+                    Ok(find_node_response) => {
+                        println!("{}", format!("Received find_node response: {:?}", find_node_response).green());
+                        self.update_routing_table(RoutingTable::from_proto_nodes(find_node_response.nodes)).await;
+                        Ok(())
+                    }
+                    Err(e) => {
+                        eprintln!("Failed to send find_node request: {}", e);
+                        self.routing_table.lock().await.remove_node(&Bytes::from(target_addr.as_bytes().to_vec()));
+                        Err(Box::new(e))
+                    }
+                }
+            }
+            Err(e) => {
+                eprintln!("Failed to send ping request: {}", e);
+                self.routing_table.lock().await.remove_node(&Bytes::from(target_addr.as_bytes().to_vec()));
+                Err(Box::new(e))
+            }
+        }
     }
-
-
 
     async fn update_routing_table(&self, nodes: Vec<NodeInfo>) {
         let mut routing_table = self.routing_table.lock().await;
@@ -173,7 +176,11 @@ impl Node {
     
                 match result {
                     Ok(_) => println!("{}", format!("Routing table refreshed successfully from {}", node_info.addr).green()),
-                    Err(e) => eprintln!("{}", format!("Failed to refresh routing table from {}: {}", node_info.addr, e).red()),
+                    Err(e) => {
+                        eprintln!("{}", format!("Failed to refresh routing table from {}: {}", node_info.addr, e).red());
+                        eprintln!("{}", format!("Removing node {} from routing table", node_info.addr).yellow());
+                        node.lock().await.routing_table.lock().await.remove_node(&node_info.id);
+                    },
                 }
             }
             else {
@@ -182,7 +189,6 @@ impl Node {
             node.lock().await.routing_table.lock().await.print_table();
         }
     }
-
 }
 
 #[tonic::async_trait]
@@ -216,13 +222,14 @@ impl Kademlia for Arc<Mutex<Node>> {
     }
 }
 
-
-pub async fn run_server(addr: &str, bootstrap_addr: Option<String>) -> Result<(), Box<dyn std::error::Error>> {
+pub async fn run_server(addr: &str, bootstrap_addr: Option<String>) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let addr = addr.parse::<SocketAddr>()?;
     let node = Node::new(addr, bootstrap_addr.as_deref()).await?;
 
     let node_clone_for_server = Arc::clone(&node);
-    tokio::spawn(Node::refresh_routing_table(node_clone_for_server));
+    tokio::spawn(async move {
+        Node::refresh_routing_table(node_clone_for_server).await;
+    });
 
     println!("{}", format!("Server listening on {}", addr).green());
     Server::builder()

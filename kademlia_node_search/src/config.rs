@@ -9,6 +9,14 @@ pub const TIMEOUT_TIMER: u64 = 3;
 pub const TIMEOUT_MAX_ATTEMPTS: u64 = 3;
 //----------------------------------- KADEMLIA CONFIGURATION (END) ----------------------------
 
+//----------------------------------- ROUTING TABLE CONFIGURATION (BEGIN) ---------------------
+// The maximum number of nodes in a bucket
+pub const K: usize = 20; 
+// The number of bits in the node ID
+pub const N_BITS: usize = 160; 
+//----------------------------------- ROUTING TABLE CONFIGURATION (End) -----------------------
+
+
 //----------------------------------- NODE GENERATION (BEGIN) ---------------------------------
 //Leading zero bits for node ID generation
 pub const C1: u32 = 14;

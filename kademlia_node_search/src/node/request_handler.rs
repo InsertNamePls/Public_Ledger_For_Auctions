@@ -8,17 +8,11 @@ use crate::kademlia::{NodeInfo as ProtoNodeInfo, PingRequest, PingResponse, Stor
 use bytes::Bytes;
 use hex::ToHex;
 use colored::*;
-use super::client::Client;
 use super::routing_table::NodeInfo;
-use super::crypto::Crypto;
 
 pub struct RequestHandler;
 
 impl RequestHandler {
-    pub fn new() -> Self {
-        RequestHandler
-    }
-
     pub async fn handle_ping(node: Arc<Mutex<Node>>, request: Request<PingRequest>) -> Result<Response<PingResponse>, Status> {
         let ping_request = request.into_inner();
         let node_address = ping_request.node_address;

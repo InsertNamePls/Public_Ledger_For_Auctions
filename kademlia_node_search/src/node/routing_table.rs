@@ -4,10 +4,8 @@ use rand::thread_rng;
 use std::collections::VecDeque;
 use std::net::SocketAddr;
 use crate::kademlia::NodeInfo as ProtoNodeInfo;
+use crate::config::{N_BITS,K};
 
-
-const K: usize = 20; // The maximum number of nodes in a bucket
-const N_BITS: usize = 160; // The number of bits in the node ID
 
 #[derive(Clone,Debug)]
 pub struct NodeInfo {
@@ -32,6 +30,10 @@ impl Bucket {
             self.nodes.pop_front();
         }
         self.nodes.push_back(node);
+    }
+
+    pub fn remove(&mut self, node_id: &Bytes) {
+        self.nodes.retain(|node| &node.id != node_id);
     }
 }
 
@@ -70,6 +72,11 @@ impl RoutingTable {
         }
         let bucket_index = self.calculate_bucket_index(&node.id, own_id);
         self.buckets[bucket_index].add(node);
+    }
+
+    pub fn remove_node(&mut self, node_id: &Bytes) {
+        let bucket_index = self.calculate_bucket_index(node_id, &self.own_id);
+        self.buckets[bucket_index].remove(node_id);
     }
 
     pub fn find_closest(&self, target_id: &Bytes) -> Vec<NodeInfo> {
