@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tonic::transport::Endpoint;
 use tonic::{Request, Status};
@@ -8,10 +10,37 @@ use ring::signature::{Ed25519KeyPair, KeyPair};
 use tokio::time::{timeout, Duration};
 use crate::config::{TIMEOUT_MAX_ATTEMPTS, TIMEOUT_TIMER};
 use colored::Colorize;
+use rand::Rng;
 
-pub struct Client;
+pub struct Client {
+    nonce_map: Mutex<HashMap<Vec<u8>, i64>>,
+    crypto: Crypto,
+}
 
 impl Client {
+    pub fn new() -> Self {
+        Client {
+            nonce_map: Mutex::new(HashMap::new()),
+            crypto: Crypto::new(),
+        }
+    }
+
+    fn get_or_generate_nonce(&self, node_id: &Vec<u8>) -> i64 {
+        let mut nonce_map = self.nonce_map.lock().unwrap();
+        nonce_map.get(node_id).cloned().unwrap_or_else(|| {
+            let nonce = rand::thread_rng().gen::<i64>();
+            nonce_map.insert(node_id.clone(), nonce);
+            nonce
+        })
+    }
+
+    fn increment_nonce(&self, node_id: &Vec<u8>) {
+        let mut nonce_map = self.nonce_map.lock().unwrap();
+        if let Some(nonce) = nonce_map.get_mut(node_id) {
+            *nonce += 1;
+        }
+    }
+
     async fn attempt_with_timeout<F, Fut, T>(mut attempt: F) -> Result<T, Status>
     where
         F: FnMut() -> Fut + Send,
@@ -29,25 +58,29 @@ impl Client {
         Err(Status::internal("All attempts to send the request failed"))
     }
 
-    pub fn create_ping_request(keypair: &Ed25519KeyPair, self_addr: String) -> PingRequest {
+    pub fn create_ping_request(&self, keypair: &Ed25519KeyPair, self_id: Vec<u8>, self_addr: String) -> PingRequest {
         let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as i64;
-        let message = format!("{}{}", self_addr, timestamp).into_bytes();
-        let signature = Crypto::sign_message(keypair, &message);
+        let nonce = self.get_or_generate_nonce(&self_id);
         let sender_public_key = keypair.public_key().as_ref().to_vec();
+        // Message is always the concatenation of the node's timestamp and the public key and id
+        let message = format!("{}{:?}{:?}",timestamp, sender_public_key, self_id).into_bytes();
+        let signature = self.crypto.sign_message(keypair, &message);
 
         PingRequest {
             node_address: self_addr,
             timestamp,
             signature,
             sender_public_key,
+            nonce,
+            requester_node_id: self_id,
         }
     }
 
-    pub async fn send_ping_request(request: PingRequest, server_addr: String) -> Result<PingResponse, Status> {
+    pub async fn send_ping_request(&self, request: PingRequest, server_addr: String) -> Result<PingResponse, Status> {
         let endpoint = Endpoint::from_shared(format!("http://{}", server_addr))
             .map_err(|e| Status::internal(format!("Failed to create endpoint: {}", e)))?;
 
-        Client::attempt_with_timeout(|| {
+        let result = Client::attempt_with_timeout(|| {
             let endpoint = endpoint.clone();
             let request = request.clone();
             async move {
@@ -56,30 +89,39 @@ impl Client {
                 let mut client = KademliaClient::new(channel);
                 client.ping(request).await.map(|response| response.into_inner())
             }
-        }).await
+        }).await;
+
+        if result.is_ok() {
+            self.increment_nonce(&request.requester_node_id);
+        }
+
+        result
     }
 
-    pub fn create_find_node_request(keypair: &Ed25519KeyPair, requester_node_id: Vec<u8>, requester_node_address: String, target_node_id: Vec<u8>) -> FindNodeRequest {
+    pub fn create_find_node_request(&self, keypair: &Ed25519KeyPair, self_id: Vec<u8>, requester_node_address: String, target_node_id: Vec<u8>) -> FindNodeRequest {
         let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as i64;
-        let message = format!("{:?}{}{:?}{}", requester_node_id, requester_node_address, target_node_id, timestamp).into_bytes();
-        let signature = Crypto::sign_message(keypair, &message);
+        let nonce = self.get_or_generate_nonce(&self_id);
         let sender_public_key = keypair.public_key().as_ref().to_vec();
+        // Message is always the concatenation of the node's timestamp and the public key and id
+        let message = format!("{}{:?}{:?}",timestamp, sender_public_key, self_id).into_bytes();
+        let signature = self.crypto.sign_message(keypair, &message);
 
         FindNodeRequest {
-            requester_node_id,
-            requester_node_address,
-            target_node_id,
+            requester_node_id: self_id,
+            requester_node_address: requester_node_address,
+            target_node_id: target_node_id,
             timestamp,
             signature,
             sender_public_key,
+            nonce,
         }
     }
 
-    pub async fn send_find_node_request(request: FindNodeRequest, target_address: String) -> Result<FindNodeResponse, Status> {
+    pub async fn send_find_node_request(&self, request: FindNodeRequest, target_address: String) -> Result<FindNodeResponse, Status> {
         let endpoint = Endpoint::from_shared(format!("http://{}", target_address))
             .map_err(|e| Status::internal(format!("Failed to create endpoint: {}", e)))?;
 
-        Client::attempt_with_timeout(|| {
+        let result = Client::attempt_with_timeout(|| {
             let endpoint = endpoint.clone();
             let request = request.clone();
             async move {
@@ -88,14 +130,22 @@ impl Client {
                 let mut client = KademliaClient::new(channel);
                 client.find_node(request).await.map(|response| response.into_inner())
             }
-        }).await
+        }).await;
+
+        if result.is_ok() {
+            self.increment_nonce(&request.requester_node_id);
+        }
+
+        result
     }
 
-    pub fn create_store_node_request(keypair: &Ed25519KeyPair, key: Vec<u8>, value: Vec<u8>) -> StoreRequest {
+    pub fn create_store_node_request(&self, keypair: &Ed25519KeyPair, self_id: Vec<u8>, key: Vec<u8>, value: Vec<u8>) -> StoreRequest {
         let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as i64;
-        let message = format!("{:?}{:?}{}", key, value, timestamp).into_bytes();
-        let signature = Crypto::sign_message(keypair, &message);
+        let nonce = self.get_or_generate_nonce(&self_id);
         let sender_public_key = keypair.public_key().as_ref().to_vec();
+        // Message is always the concatenation of the node's timestamp and the public key and id
+        let message = format!("{}{:?}{:?}",timestamp, sender_public_key, self_id).into_bytes();
+        let signature = self.crypto.sign_message(keypair, &message);
 
         StoreRequest {
             key,
@@ -103,14 +153,16 @@ impl Client {
             timestamp,
             signature,
             sender_public_key,
+            nonce,
+            requester_node_id: self_id,
         }
     }
 
-    pub async fn send_store_request(request: StoreRequest, target_address: String) -> Result<StoreResponse, Status> {
+    pub async fn send_store_request(&self, request: StoreRequest, target_address: String) -> Result<StoreResponse, Status> {
         let endpoint = Endpoint::from_shared(format!("http://{}", target_address))
             .map_err(|e| Status::internal(format!("Failed to create endpoint: {}", e)))?;
-    
-        Client::attempt_with_timeout(|| {
+
+        let result = Client::attempt_with_timeout(|| {
             let endpoint = endpoint.clone();
             let request = request.clone();
             async move {
@@ -119,28 +171,38 @@ impl Client {
                 let mut client = KademliaClient::new(channel);
                 client.store(request).await.map(|response| response.into_inner())
             }
-        }).await
+        }).await;
+
+        if result.is_ok() {
+            self.increment_nonce(&request.requester_node_id);
+        }
+
+        result
     }
 
-    pub fn create_find_value_request(keypair: &Ed25519KeyPair, key: Vec<u8>) -> FindValueRequest {
+    pub fn create_find_value_request(&self, keypair: &Ed25519KeyPair, self_id: Vec<u8>, key: Vec<u8>) -> FindValueRequest {
         let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs() as i64;
-        let message = format!("{:?}{}", key, timestamp).into_bytes();
-        let signature = Crypto::sign_message(keypair, &message);
+        let nonce = self.get_or_generate_nonce(&self_id);
         let sender_public_key = keypair.public_key().as_ref().to_vec();
+        // Message is always the concatenation of the node's timestamp and the public key and id
+        let message = format!("{}{:?}{:?}",timestamp, sender_public_key, self_id).into_bytes();
+        let signature = self.crypto.sign_message(keypair, &message);
 
         FindValueRequest {
             key,
             timestamp,
             signature,
             sender_public_key,
+            nonce,
+            requester_node_id: self_id,
         }
     }
 
-    pub async fn send_find_value_request(request: FindValueRequest, target_address: String) -> Result<FindValueResponse, Status> {
+    pub async fn send_find_value_request(&self, request: FindValueRequest, target_address: String) -> Result<FindValueResponse, Status> {
         let endpoint = Endpoint::from_shared(format!("http://{}", target_address))
             .map_err(|e| Status::internal(format!("Failed to create endpoint: {}", e)))?;
-    
-        Client::attempt_with_timeout(|| {
+
+        let result = Client::attempt_with_timeout(|| {
             let endpoint = endpoint.clone();
             let request = request.clone();
             async move {
@@ -149,6 +211,12 @@ impl Client {
                 let mut client = KademliaClient::new(channel);
                 client.find_value(request).await.map(|response| response.into_inner())
             }
-        }).await
+        }).await;
+
+        if result.is_ok() {
+            self.increment_nonce(&request.requester_node_id);
+        }
+
+        result
     }
 }

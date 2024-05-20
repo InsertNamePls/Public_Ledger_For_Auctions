@@ -34,6 +34,8 @@ pub struct Node {
     pub addr: SocketAddr,
     pub storage: Mutex<HashMap<Bytes, Bytes>>,
     pub routing_table: Mutex<RoutingTable>,
+    pub crypto: Crypto,
+    pub client: Client,
 }
 
 impl Node {
@@ -48,6 +50,8 @@ impl Node {
             addr,
             storage: Mutex::new(HashMap::new()),
             routing_table,
+            crypto: Crypto::new(),
+            client: Client::new(),
         }));
 
 
@@ -103,19 +107,23 @@ impl Node {
     }
 
     async fn fetch_routing_table(&self, target_addr: &str) -> Result<(), Box<dyn std::error::Error>> {
-        let ping_request = Client::create_ping_request(&self.keypair, self.addr.to_string());
-        let ping_response = Client::send_ping_request(ping_request, target_addr.to_string()).await?;
+        let ping_request = self.client.create_ping_request(
+            &self.keypair,
+            self.id.to_vec(),
+            self.addr.to_string()
+        );
+        let ping_response = self.client.send_ping_request(ping_request, target_addr.to_string()).await?;
 
         println!("{}", format!("Received ping response: {:?}", ping_response).green());
 
-        let find_node_request = Client::create_find_node_request(
+        let find_node_request = self.client.create_find_node_request(
             &self.keypair,
             self.id.to_vec(),
             self.addr.to_string(),
             ping_response.node_id.to_vec()
         );
 
-        let find_node_response = Client::send_find_node_request(
+        let find_node_response = self.client.send_find_node_request(
             find_node_request,
             target_addr.to_string()
         ).await?;
