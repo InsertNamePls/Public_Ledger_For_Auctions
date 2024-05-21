@@ -44,12 +44,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some(("server", server_matches)) => {
             let addr = server_matches.get_one::<String>("addr").unwrap(); // Extracts the server address
             let bootstrap_addr = server_matches.get_one::<String>("bootstrap"); // Extracts the optional bootstrap address
-            rt.block_on(node::run_server(addr, bootstrap_addr.cloned()))?; // Use block_on to run the async function, passing the optional bootstrap address
+            rt.block_on(async {
+                if let Err(e) = node::run_server(addr, bootstrap_addr.cloned()).await {
+                    eprintln!("Server error: {}", e);
+                }
+            });
         },
         Some(("client", client_matches)) => {
             let addr = client_matches.get_one::<String>("addr").unwrap(); // Extracts the client address
             let command = client_matches.get_one::<String>("command").unwrap(); // Extracts the command
-            rt.block_on(client::run_client(addr, command))?; // Runs the client logic
+            rt.block_on(async {
+                if let Err(e) = client::run_client(addr, command).await {
+                    eprintln!("Client error: {}", e);
+                }
+            });
         },
         _ => unreachable!(), // Ensures that the command falls into known subcommands
     }
