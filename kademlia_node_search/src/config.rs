@@ -3,6 +3,12 @@
 pub const REFRESH_TIMER_UPPER: u64 = 20;
 //Lower limit for random routing table refresh
 pub const REFRESH_TIMER_LOWER: u64 = 5;
+//Upper limit for random ping refresh
+pub const PING_TIMER_UPPER: u64 = 20;
+//Lower limit for random ping refresh
+pub const PING_TIMER_LOWER: u64 = 5;
+//Number of nodes to ping, for random ping refresh
+pub const N: usize = 5; 
 //Timeout in seconds for each request
 pub const TIMEOUT_TIMER: u64 = 3;
 //Maximum number of attempts for each request for timeout

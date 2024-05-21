@@ -26,7 +26,7 @@ use ring::{signature};
 use ring::digest::{digest, SHA256};
 use ring::signature::KeyPair;
 //Config Constants
-use crate::config::{C1, LOG_INTERVAL, REFRESH_TIMER_LOWER, REFRESH_TIMER_UPPER};
+use crate::config::{C1, LOG_INTERVAL, REFRESH_TIMER_LOWER, REFRESH_TIMER_UPPER, PING_TIMER_LOWER, PING_TIMER_UPPER, N};
 
 pub struct Node {
     pub keypair: signature::Ed25519KeyPair,
@@ -189,6 +189,43 @@ impl Node {
             node.lock().await.routing_table.lock().await.print_table();
         }
     }
+
+    async fn check_nodes_alive(node: Arc<Mutex<Node>>) {
+        let interval_range = Uniform::from(PING_TIMER_LOWER..PING_TIMER_UPPER);
+        let mut rng = rand_chacha::ChaChaRng::from_entropy(); // RNG should be outside the loop to preserve state and performance
+    
+        loop {
+            let sleep_time = interval_range.sample(&mut rng);
+            println!("{}", format!("Checking node liveness in {} seconds", sleep_time).cyan());
+            tokio::time::sleep(Duration::from_secs(sleep_time)).await;
+    
+            // Lock only when needed and scope the lock to minimize blocking
+            let node_infos: Vec<NodeInfo> = {
+                let node_lock = node.lock().await;
+                let routing_table = node_lock.routing_table.lock().await;
+                routing_table.random_nodes(N) // Get N random nodes
+            };
+    
+            for node_info in node_infos {
+                println!("{}", format!("Pinging node: {:?}", node_info.addr).cyan());
+                // Send ping request outside of the node locks
+                let result = {
+                    let node_lock = node.lock().await;
+                    let ping_request = node_lock.client.create_ping_request(&node_lock.keypair, node_lock.id.to_vec(), node_lock.addr.to_string());
+                    node_lock.client.send_ping_request(ping_request, node_info.addr.to_string()).await
+                };
+    
+                match result {
+                    Ok(_) => println!("{}", format!("Node {} is alive", node_info.addr).green()),
+                    Err(e) => {
+                        eprintln!("{}", format!("Node {} is unreachable: {}", node_info.addr, e).red());
+                        eprintln!("{}", format!("Removing node {} from routing table", node_info.addr).yellow());
+                        node.lock().await.routing_table.lock().await.remove_node(&node_info.id);
+                    },
+                }
+            }
+        }
+    }
 }
 
 #[tonic::async_trait]
@@ -228,7 +265,12 @@ pub async fn run_server(addr: &str, bootstrap_addr: Option<String>) -> Result<()
 
     let node_clone_for_server = Arc::clone(&node);
     tokio::spawn(async move {
-        Node::refresh_routing_table(node_clone_for_server).await;
+        Node::refresh_routing_table(node_clone_for_server.clone()).await;
+    });
+
+    let node_clone_for_checking = Arc::clone(&node);
+    tokio::spawn(async move {
+        Node::check_nodes_alive(node_clone_for_checking.clone()).await;
     });
 
     println!("{}", format!("Server listening on {}", addr).green());

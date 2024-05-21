@@ -121,6 +121,17 @@ impl RoutingTable {
             .choose(&mut thread_rng())  // Randomly select one node
     }
 
+    pub fn random_nodes(&self, n: usize) -> Vec<NodeInfo> {
+        self.buckets.iter()
+            .flat_map(|bucket| &bucket.nodes)
+            .filter(|node_info| node_info.id != self.own_id)
+            .choose_multiple(&mut thread_rng(), n) // Randomly select n nodes
+            .into_iter() // Convert the Vec<&NodeInfo> into an iterator
+            .cloned() // Clone each NodeInfo to get Vec<NodeInfo>
+            .collect()
+    }
+
+
     // Function to check if a node is already in the routing table
     pub fn contains(&self, node_id: &Bytes) -> bool {
         self.buckets.iter().any(|bucket| {
