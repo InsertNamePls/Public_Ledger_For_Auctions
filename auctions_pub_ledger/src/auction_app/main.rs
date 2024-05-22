@@ -1,23 +1,28 @@
-mod auction;
-mod user;
-use crate::auction::{list_auctions, Transaction};
-use crate::auction::{Auction, Bid};
-use auction_client::{get_auction_house, send_transaction};
+use auctions_pub_ledger::auction_app;
+use auctions_pub_ledger::auction_app::auction::list_auctions;
+use auctions_pub_ledger::auction_app::auction::Auction;
+use auctions_pub_ledger::auction_app::auction::AuctionHouse;
+use auctions_pub_ledger::auction_app::auction::Bid;
+use auctions_pub_ledger::auction_app::auction::Notification;
+use auctions_pub_ledger::auction_app::auction::Transaction;
+use auctions_pub_ledger::auction_app::auction_operation::client::get_auction_house;
+use auctions_pub_ledger::auction_app::auction_operation::client::send_transaction;
+use auctions_pub_ledger::auction_app::notifications::notify_server::notification_server;
+use auctions_pub_ledger::auction_app::user::User;
+use auctions_pub_ledger::cryptography::ecdsa_keys::generate_ecdsa_keypair;
+use auctions_pub_ledger::cryptography::ecdsa_keys::load_ecdsa_keys;
 use chrono::Duration;
 use chrono::Utc;
 use k256::ecdsa::SigningKey;
+use k256::ecdsa::{signature::Signer, Signature};
+use sha256::digest;
 use std::collections::HashMap;
 use std::env;
 use std::fs;
 use std::io::{self, Write};
-use user::User;
-mod auction_client;
-use sha256::digest;
 
-#[path = "../cryptography/ecdsa_keys.rs"]
-mod keys;
-use crate::keys::{generate_ecdsa_keypair, load_ecdsa_keys};
-use k256::ecdsa::{signature::Signer, Signature};
+use tokio::task;
+
 #[cfg(not(target_os = "windows"))]
 fn clear_screen() {
     std::process::Command::new("clear").status().unwrap();
@@ -25,6 +30,7 @@ fn clear_screen() {
 
 #[tokio::main]
 async fn main() {
+    task::spawn(notification_server());
     clear_screen();
     let args: Vec<String> = env::args().collect();
     println!("Welcome to the BidBuddie's Auction System!");
@@ -234,8 +240,8 @@ async fn join_auction(user: &mut User, dest_ip: &Vec<String>, private_key: Signi
         .await
         .expect("error geting acution from peers");
 
-    list_auctions().await;
-    let auction_id;
+    let _ = list_auctions().await;
+    let auction_signature;
     loop {
         println!("Enter the Auction ID you want to join (or 'exit' to cancel):");
         let mut auction_id_str = String::new();
@@ -250,9 +256,9 @@ async fn join_auction(user: &mut User, dest_ip: &Vec<String>, private_key: Signi
         }
 
         // Attempt to parse the input as an integer
-        match trimmed_input.parse::<u32>() {
-            Ok(id) => {
-                auction_id = id;
+        match trimmed_input.parse::<String>() {
+            Ok(value) => {
+                auction_signature = value;
                 break; // Exit the loop on successful parse/
             }
             Err(_) => println!("Please enter a valid ID or 'exit' to cancel."),
@@ -272,14 +278,15 @@ async fn join_auction(user: &mut User, dest_ip: &Vec<String>, private_key: Signi
         }
     };
 
-    let signed_content = digest(auction_id.to_string() + &user.uid.clone() + &amount.to_string());
-    let signature: Signature = private_key.sign(signed_content.as_bytes());
+    let signed_content =
+        digest(auction_signature.clone() + &user.uid.clone() + &amount.to_string());
+    let signature: Signature = private_key.sign(signed_content.clone().as_bytes());
     if user.credits >= amount {
         let bid = Bid {
-            auction_id,
             bidder: user.uid.clone(),
             amount,
-            signature: hex::encode(signature.to_bytes()),
+            signature: hex::encode(signature.clone().to_bytes()),
+            auction_signature: auction_signature,
         };
 
         match send_transaction(Transaction::Bid(bid.clone()), dest_ip[0].clone()).await {
@@ -334,23 +341,20 @@ async fn create_auction(user: &User, dest_ip: &Vec<String>, private_key: Signing
     let auction_house = list_auctions().await;
     println!("local auction house {:?}\n\n", auction_house.clone());
 
-    let signed_content = digest(
-        auction_house.auctions.len().to_string()
-            + item_name.trim()
-            + &starting_bid.to_string()
-            + &user.uid.clone().to_string(),
-    );
+    let signed_content =
+        digest(item_name.trim().to_string() + &starting_bid.to_string() + &user.uid.clone());
+
     let signature: Signature = private_key.sign(signed_content.as_bytes());
 
     // Use user.uid to pass the creator's uid to the new auction
     let auction = Auction::new(
-        auction_house.auctions.len() as u32,
         item_name.trim().to_string(),
         start_time,
         end_time,
         starting_bid,
         user.uid.clone(), // Pass the user's uid as the creator
         hex::encode(signature.to_bytes()),
+        vec![],
     );
     println!("{:?}", auction.clone());
 

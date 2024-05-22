@@ -1,6 +1,10 @@
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
 use sha256::digest;
+use std::sync::Arc;
+use std::usize;
+use std::vec::Vec;
+use tokio::sync::Mutex;
 
 const DIFICULTY: usize = 4;
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -126,4 +130,39 @@ pub async fn init_blockchain() -> Blockchain {
     let mut blockchain: Blockchain = Blockchain::new();
     blockchain.add_block(genesis_blk);
     blockchain
+}
+
+pub async fn block_generator(
+    shared_blockchain_vector: Arc<Mutex<Vec<Blockchain>>>,
+    tx: Vec<String>,
+) -> Block {
+    let blockchain_vector = shared_blockchain_vector.lock().await;
+
+    let main_blockchain = blockchain_vector.clone().get(0).unwrap().clone();
+
+    let previous_block = main_blockchain.clone().blocks.last().unwrap().clone();
+    println!("previous{:?}", previous_block);
+    let mut block: Block = Block::new(
+        previous_block.index + 1,
+        previous_block.hash.clone(),
+        0,
+        Utc::now().timestamp_millis(),
+        "".to_string(),
+        tx,
+    );
+
+    block.mine_block(4);
+
+    println!("generated_block -> {:?}\n", block);
+    block
+}
+
+// based on local blockchains validate if block is valid
+pub async fn validator(blockchain: Blockchain, block: Block) -> bool {
+    if validate_block(&block, blockchain.blocks.last().unwrap(), DIFICULTY) {
+        true
+    } else {
+        println!("block {} is invalid ", block.index);
+        false
+    }
 }
