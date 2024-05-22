@@ -43,21 +43,19 @@ impl RequestHandler {
         let nonce = store_request.nonce;
         let requester_id = Bytes::from(store_request.requester_node_id.clone());
         let timestamp = store_request.timestamp;
-
+    
         // Message is always the concatenation of the node's timestamp and the public key and id
-        let message = format!("{}{:?}{:?}",store_request.timestamp, store_request.sender_public_key, store_request.requester_node_id).into_bytes();
-
+        let message = format!("{}{:?}{:?}", store_request.timestamp, store_request.sender_public_key, store_request.requester_node_id).into_bytes();
+    
         // Ensure the request is valid
         if !node.lock().await.crypto.validate_request(timestamp, nonce, &requester_id, &message, &store_request.signature, &store_request.sender_public_key) {
             return Err(Status::unauthenticated("Invalid request"));
         }
-
+    
         let node = node.lock().await;
         let mut storage = node.storage.lock().await;
         let should_forward = match storage.get(&key) {
-            Some(existing_value) if existing_value == &value => {
-                false
-            },
+            Some(existing_value) if existing_value == &value => false,
             _ => {
                 storage.insert(key.clone(), value.clone());
                 let key_hex = format!("{:x}", key);
@@ -66,32 +64,44 @@ impl RequestHandler {
                 true
             }
         };
-
+    
         if should_forward {
             let closest_nodes = {
                 let routing_table = node.routing_table.lock().await;
                 routing_table.find_closest(&key)
             };
-
+    
+            let client = node.client.clone(); // clone the client for use within the async block
+    
             for node_info in closest_nodes.iter() {
                 let client_addr = node_info.addr.to_string();
-                let forward_store_request = node.client.create_store_node_request(
-                    &node.keypair, // this is wrong, should be node keypair from node_info 
-                    node.id.to_vec(),  // this is wrong, should be node id from node_info 
-                    key.to_vec(), 
+                let node_id = node_info.id.clone();
+    
+                let forward_store_request = client.create_store_node_request(
+                    &node.keypair, // use the current node's keypair
+                    node.id.to_vec(), // use the current node's id
+                    key.to_vec(),
                     value.to_vec()
                 );
-
+                
                 if client_addr != node.addr.to_string() {
+                    let client_clone = node.client.clone();
                     tokio::spawn(async move {
-                        //node.client.send_store_request(forward_store_request, client_addr).await; // this is wrong, should be node from node_info
+                        let result = client_clone.send_store_request(forward_store_request, client_addr.clone()).await;
+                        if let Err(e) = result {
+                            eprintln!("Failed to forward store request to {}: {}", client_addr, e);
+                        } else {
+                            println!("Successfully forwarded store request to {}", client_addr);
+                        }
                     });
                 }
             }
         }
-
+    
         Ok(Response::new(StoreResponse { success: true }))
     }
+    
+    
 
     pub async fn handle_find_node(node: Arc<Mutex<Node>>, request: Request<FindNodeRequest>) -> Result<Response<FindNodeResponse>, Status> {
         let find_node_request = request.into_inner();

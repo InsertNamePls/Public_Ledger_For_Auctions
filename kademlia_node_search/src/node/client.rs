@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tonic::transport::Endpoint;
 use tonic::{Request, Status};
@@ -12,19 +12,20 @@ use crate::config::{TIMEOUT_MAX_ATTEMPTS, TIMEOUT_TIMER};
 use colored::Colorize;
 use rand::Rng;
 
+#[derive(Clone)]
 pub struct Client {
-    nonce_map: Mutex<HashMap<Vec<u8>, i64>>,
-    crypto: Crypto,
+    nonce_map: Arc<Mutex<HashMap<Vec<u8>, i64>>>,
+    crypto: Arc<Crypto>,
 }
 
 impl Client {
     pub fn new() -> Self {
         Client {
-            nonce_map: Mutex::new(HashMap::new()),
-            crypto: Crypto::new(),
+            nonce_map: Arc::new(Mutex::new(HashMap::new())),
+            crypto: Arc::new(Crypto::new()),
         }
     }
-
+    
     fn get_or_generate_nonce(&self, node_id: &Vec<u8>) -> i64 {
         let mut nonce_map = self.nonce_map.lock().unwrap();
         nonce_map.get(node_id).cloned().unwrap_or_else(|| {
