@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 use tonic::transport::Endpoint;
-use tonic::{Request, Status};
+use tonic::{Status};
 use crate::kademlia::kademlia_client::KademliaClient;
 use crate::kademlia::{FindNodeRequest, FindNodeResponse, FindValueResponse, FindValueRequest, PingRequest, PingResponse, StoreRequest, StoreResponse};
 use crate::node::crypto::Crypto;

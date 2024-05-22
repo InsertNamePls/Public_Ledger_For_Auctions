@@ -18,7 +18,7 @@ use tonic::transport::{Server};
 use tonic::{Request, Response, Status};
 use crate::kademlia::kademlia_server::{Kademlia, KademliaServer};
 use crate::kademlia::{PingRequest, PingResponse, StoreRequest, StoreResponse, FindNodeRequest, FindNodeResponse, FindValueRequest, FindValueResponse};
-use tokio::time::{Duration, timeout};
+use tokio::time::{Duration};
 use self::routing_table::NodeInfo;
 use rand::SeedableRng;
 use colored::*;

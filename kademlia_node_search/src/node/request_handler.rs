@@ -14,7 +14,6 @@ pub struct RequestHandler;
 impl RequestHandler {
     pub async fn handle_ping(node: Arc<Mutex<Node>>, request: Request<PingRequest>) -> Result<Response<PingResponse>, Status> {
         let ping_request = request.into_inner();
-        let node_address = ping_request.node_address;
         let timestamp = ping_request.timestamp;
         let nonce = ping_request.nonce;
         let requester_id = Bytes::from(ping_request.requester_node_id.clone());
@@ -30,8 +29,11 @@ impl RequestHandler {
                 is_online: true,
                 node_id: node.id.clone().to_vec(),
             };
+            node.routing_table.lock().await.adjust_reputation(&requester_id, 1);
             Ok(Response::new(response))
         } else {
+            let node = node.lock().await;
+            node.routing_table.lock().await.adjust_reputation(&requester_id, -1);
             Err(Status::unauthenticated("Invalid request"))
         }
     }
@@ -49,9 +51,11 @@ impl RequestHandler {
     
         // Ensure the request is valid
         if !node.lock().await.crypto.validate_request(timestamp, nonce, &requester_id, &message, &store_request.signature, &store_request.sender_public_key) {
+            let node = node.lock().await;
+            node.routing_table.lock().await.adjust_reputation(&requester_id, -1);            
             return Err(Status::unauthenticated("Invalid request"));
         }
-    
+
         let node = node.lock().await;
         let mut storage = node.storage.lock().await;
         let should_forward = match storage.get(&key) {
@@ -61,6 +65,7 @@ impl RequestHandler {
                 let key_hex = format!("{:x}", key);
                 let value_hex = format!("{:x}", value);
                 println!("Added <key:value> to local storage: <{}:{}>", key_hex, value_hex);
+                node.routing_table.lock().await.adjust_reputation(&requester_id, 1);            
                 true
             }
         };
@@ -75,7 +80,6 @@ impl RequestHandler {
     
             for node_info in closest_nodes.iter() {
                 let client_addr = node_info.addr.to_string();
-                let node_id = node_info.id.clone();
     
                 let forward_store_request = client.create_store_node_request(
                     &node.keypair, // use the current node's keypair
@@ -83,7 +87,7 @@ impl RequestHandler {
                     key.to_vec(),
                     value.to_vec()
                 );
-                
+
                 if client_addr != node.addr.to_string() {
                     let client_clone = node.client.clone();
                     tokio::spawn(async move {
@@ -116,10 +120,13 @@ impl RequestHandler {
 
         // Ensure the request is valid
         if !node.lock().await.crypto.validate_request(timestamp, nonce, &requester_id, &message, &find_node_request.signature, &find_node_request.sender_public_key) {
+            let node = node.lock().await;
+            node.routing_table.lock().await.adjust_reputation(&requester_id, -1);
             return Err(Status::unauthenticated("Invalid request"));
         }
 
         let node = node.lock().await;
+        node.routing_table.lock().await.adjust_reputation(&requester_id, 1);
         println!("{}", format!("Received find_node request from [{}]: target_id {}, requester_id {}", 
         requester_address, 
         target_id.encode_hex::<String>(), 
@@ -132,10 +139,10 @@ impl RequestHandler {
 
         let mut routing_table = node.routing_table.lock().await;
         if !routing_table.contains(&requester_id) {
-            let requester_node_info = NodeInfo {
-                id: requester_id.clone(),
-                addr: requester_address.parse::<SocketAddr>().unwrap(),
-            };
+            let requester_node_info = NodeInfo::new(
+                requester_id.clone(),
+                requester_address.parse::<SocketAddr>().unwrap()
+            );
             routing_table.add_node(requester_node_info, &node.id);
             println!("{}", "Added requester's information to routing table.".green());
             println!("{}", "Updated routing table:".green());
@@ -162,10 +169,13 @@ impl RequestHandler {
 
         // Ensure the request is valid
         if !node.lock().await.crypto.validate_request(timestamp, nonce, &requester_id, &message, &find_value_request.signature, &find_value_request.sender_public_key) {
+            let node = node.lock().await;
+            node.routing_table.lock().await.adjust_reputation(&requester_id, -1);
             return Err(Status::unauthenticated("Invalid request"));
         }
 
         let node = node.lock().await;
+        node.routing_table.lock().await.adjust_reputation(&requester_id, 1);
         println!("{}", format!("Key requested: {:?}", key).yellow());
 
         let storage = node.storage.lock().await;

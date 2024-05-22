@@ -34,6 +34,8 @@ pub const LOG_INTERVAL: u64 = 10_000;
 //----------------------------------- ATTACK PREVENTION (BEGIN) -------------------------------
 // Replay attack prevention time window in seconds
 pub const REPLAY_WINDOW: i64 = 120;
-
-  
+// The maximum number of nodes per IP address
+pub const MAX_NODES_PER_IP: usize = 5;
+// The reputation threshold for a node to be removed from the routing table
+pub const REPUTATION_THRESHOLD: i32 = -5;
 //----------------------------------- ATTACK PREVENTION (END) ---------------------------------
