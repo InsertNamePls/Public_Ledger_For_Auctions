@@ -1,5 +1,6 @@
-use crate::blockchain::{Block, Blockchain};
-use crate::blockchain_operator::{save_blockchain_locally, validator};
+use crate::auction_server::blockchain::validator;
+use crate::auction_server::blockchain::{Block, Blockchain};
+use crate::auction_server::blockchain_operator::save_blockchain_locally;
 use chrono::Utc;
 use std::sync::Arc;
 
@@ -81,9 +82,8 @@ pub async fn blockchain_handler(shared_blockchain_vector: &mut Arc<Mutex<Vec<Blo
 
     println!("\nActive blockchains: {:?} \n", active_blockchains);
 
-    // if there are archivable blochains
+    // if there are archivable blochainif archive_blockchains.clone().len()::MAX > 0 {
     if archive_blockchains.clone().len() > 0 {
-        // cleanup blockchains marked as archivable
         for y in archive_blockchains.clone() {
             blockchain_vector.retain(|blockchain| blockchain != &y);
         }
