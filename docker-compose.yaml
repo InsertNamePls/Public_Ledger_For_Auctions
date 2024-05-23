@@ -2,10 +2,12 @@ version: "3.8"
 
 services:
   server1:
-    image: dledger2auction
+    build: ./auctions_pub_ledger
+    #image: dledger2auction
     environment:
       HOME: /home
       NGH_ADDR: 10.10.0.3
+      KADEMLIA_LOCAL_NODE: 10.10.0.2:50051
     networks:
       vpcbr:
         ipv4_address: 10.10.0.2
@@ -13,10 +15,12 @@ services:
     #command: ["cargo build"]
 
   server2:
-    image: dledger2auction
+    build: ./auctions_pub_ledger
+    #image: dledger2auction
     environment:
       HOME: /home
       NGH_ADDR: 10.10.0.2
+      KADEMLIA_LOCAL_NODE: 10.10.0.3:50051
     networks:
       vpcbr:
         ipv4_address: 10.10.0.3
@@ -28,19 +32,23 @@ services:
   # #       "cd /home/ && cargo build && cargo run --bin main -- join_blockchain 10.10.0.2",
   # #      ]
   auction1:
-    image: dledger2auction
+    build: ./auctions_pub_ledger
+    #image: dledger2auction
     environment:
       HOME: /home
       NGH_ADDR: 10.10.0.2
+      KADEMLIA_LOCAL_NODE: 10.10.0.4:50051
     networks:
       vpcbr:
         ipv4_address: 10.10.0.4
     tty: true
   auction2:
-    image: dledger2auction
+    build: ./auctions_pub_ledger
+    #image: dledger2auction
     environment:
       HOME: /home
       NGH_ADDR: 10.10.0.3
+      KADEMLIA_LOCAL_NODE: 10.10.0.5:50051
     networks:
       vpcbr:
         ipv4_address: 10.10.0.5

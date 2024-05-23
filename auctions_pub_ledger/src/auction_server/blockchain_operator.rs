@@ -1,141 +1,10 @@
-use crate::blockchain::{self, validate_block, Block, Blockchain};
-use chrono::Utc;
-use std::sync::Arc;
+use crate::auction_server::blockchain::{self, validate_block, Block, Blockchain};
+use crate::auction_server::blockchain_operation::client::blockchain_client;
+use crate::auction_server::blockchain_operation::client::blockchain_client_async;
+use crate::blockchain_grpc::ProofOfWorkRequest;
+use crate::blockchain_grpc::RetrieveBlockchainRequest;
+use std::fs;
 use std::vec::Vec;
-use std::{fs, usize};
-use tokio::sync::Mutex;
-
-const DIFICULTY: usize = 4;
-
-pub async fn block_generator(
-    shared_blockchain_vector: Arc<Mutex<Vec<Blockchain>>>,
-    tx: Vec<String>,
-) -> Block {
-    let blockchain_vector = shared_blockchain_vector.lock().await;
-
-    let main_blockchain = blockchain_vector.clone().get(0).unwrap().clone();
-
-    let previous_block = main_blockchain.clone().blocks.last().unwrap().clone();
-    println!("previous{:?}", previous_block);
-    let mut block: Block = Block::new(
-        previous_block.index + 1,
-        previous_block.hash.clone(),
-        0,
-        Utc::now().timestamp_millis(),
-        "".to_string(),
-        tx,
-    );
-
-    block.mine_block(4);
-
-    println!("generated_block -> {:?}\n", block);
-    block
-}
-
-// based on local blockchains validate if block is valid
-pub async fn validator(blockchain: Blockchain, block: Block) -> bool {
-    if validate_block(&block, blockchain.blocks.last().unwrap(), DIFICULTY) {
-        true
-    } else {
-        println!("block {} is invalid ", block.index);
-        false
-    }
-}
-
-pub async fn save_blockchain_locally(blockchain: &Blockchain, file_path: &str) {
-    let chain_serialized = serde_json::to_string_pretty(&blockchain).unwrap();
-    fs::write(file_path, chain_serialized).expect("Unable to write file");
-}
-use crate::blockchain_pow::block_handler;
-use blockchain_grpc::blockchain_grpc_client::BlockchainGrpcClient;
-use blockchain_grpc::blockchain_grpc_server::BlockchainGrpcServer;
-use blockchain_grpc::{
-    ProofOfWorkRequest, ProofOfWorkResponse, RetrieveBlockchainRequest, RetrieveBlockchainResponse,
-};
-use tonic::transport::{Certificate, Channel, ClientTlsConfig};
-use tonic::{
-    transport::{Identity, Server, ServerTlsConfig},
-    Request, Response, Status,
-};
-
-#[derive(Default, Debug, Clone)]
-pub struct BlockchainServer {
-    shared_blockchain_state: Arc<Mutex<Vec<Blockchain>>>,
-}
-
-pub mod blockchain_grpc {
-    tonic::include_proto!("blockchain_grpc");
-}
-type BlockchainGrpcResult<T> = Result<Response<T>, Status>;
-use crate::blockchain_operator::blockchain_grpc::blockchain_grpc_server::BlockchainGrpc;
-#[tonic::async_trait]
-impl BlockchainGrpc for BlockchainServer {
-    async fn retrieve_blockchain(
-        &self,
-        _request: Request<RetrieveBlockchainRequest>,
-    ) -> BlockchainGrpcResult<RetrieveBlockchainResponse> {
-        // here get the shared state and lock it
-        let bch = &self.shared_blockchain_state.lock().await;
-        // send main blockchain to client!!!
-        let blockchain = serde_json::to_string(&bch.get(0).unwrap()).unwrap();
-
-        Ok(Response::new(RetrieveBlockchainResponse { blockchain }))
-    }
-    async fn proof_of_work(
-        &self,
-        request: Request<ProofOfWorkRequest>,
-    ) -> BlockchainGrpcResult<ProofOfWorkResponse> {
-        let block: Block = serde_json::from_str(&request.into_inner().block).unwrap();
-
-        println!("incoming block from peer: {:?}", block.clone());
-        let validation =
-            block_handler(&mut self.shared_blockchain_state.clone(), block.clone()).await;
-
-        Ok(Response::new(ProofOfWorkResponse { validation }))
-    }
-}
-
-// blockchain Server
-pub async fn blockchain_server(share_blockchain_vector: Arc<Mutex<Vec<Blockchain>>>) {
-    let cert = std::fs::read_to_string("tls/server.crt");
-    let key = std::fs::read_to_string("tls/server.key");
-
-    let identity = Identity::from_pem(cert.unwrap(), key.unwrap());
-
-    let addr = "0.0.0.0:3001".parse().unwrap();
-
-    Server::builder()
-        .tls_config(ServerTlsConfig::new().identity(identity))
-        .unwrap()
-        .add_service(BlockchainGrpcServer::new(BlockchainServer {
-            shared_blockchain_state: share_blockchain_vector,
-        }))
-        .serve(addr)
-        .await;
-}
-
-// blockchain client
-pub async fn blockchain_client(
-    peer: String,
-) -> Result<
-    blockchain_grpc::blockchain_grpc_client::BlockchainGrpcClient<Channel>,
-    Box<dyn std::error::Error>,
-> {
-    let ca = std::fs::read_to_string("tls/rootCA.crt")?;
-    let tls = ClientTlsConfig::new()
-        .ca_certificate(Certificate::from_pem(ca))
-        .domain_name("auctiondht.com");
-    let channel = Channel::builder(format!("https://{}:3001", peer).parse().unwrap())
-        .tls_config(tls)
-        .unwrap()
-        .connect()
-        .await
-        .unwrap();
-
-    let client = BlockchainGrpcClient::new(channel);
-
-    Ok(client)
-}
 
 pub async fn get_remote_blockchain(
     peer: String,
@@ -152,13 +21,13 @@ pub async fn get_remote_blockchain(
     Ok(blockchain_vector)
 }
 
-// blockchain pow client
 pub async fn block_peer_validator_client(
     block_to_validate: Block,
     peer: String,
-) -> Result<bool, Box<dyn std::error::Error>> {
-    let mut client = blockchain_client(peer).await?;
+) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
+    let mut client = blockchain_client_async(peer).await?;
 
+    //let mut client = BlockchainGrpcClient::connect(format!("http://{}:3001", peer)).await?;
     let block = serde_json::to_string(&block_to_validate).unwrap();
     let request = tonic::Request::new(ProofOfWorkRequest { block });
     let response = client.proof_of_work(request).await?;
@@ -166,4 +35,9 @@ pub async fn block_peer_validator_client(
     let block_validation: bool = response.into_inner().validation;
 
     Ok(block_validation)
+}
+
+pub async fn save_blockchain_locally(blockchain: &Blockchain, file_path: &str) {
+    let chain_serialized = serde_json::to_string_pretty(&blockchain).unwrap();
+    fs::write(file_path, chain_serialized).expect("Unable to write file");
 }

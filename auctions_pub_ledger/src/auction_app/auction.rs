@@ -4,15 +4,20 @@ use serde::{Deserialize, Serialize};
 use std::{fs, io};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Bid {
-    pub auction_id: u32,
     pub bidder: String,
     pub amount: f32,
     pub signature: String,
+    pub auction_signature: String,
+}
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Notification {
+    pub bidder: String,
+    pub amount: f32,
+    pub auction_signature: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Auction {
-    pub auction_id: u32,
     pub item_name: String,
     #[serde(with = "chrono::serde::ts_seconds")]
     pub start_time: DateTime<Utc>,
@@ -23,6 +28,7 @@ pub struct Auction {
     pub active: bool,
     pub user_id: String,
     pub signature: String,
+    pub subscribers: Vec<String>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -33,16 +39,15 @@ pub enum Transaction {
 
 impl Auction {
     pub fn new(
-        auction_id: u32,
         item_name: String,
         start_time: DateTime<Utc>,
         end_time: DateTime<Utc>,
         starting_bid: f32,
         user_id: String,
         signature: String,
+        subscribers: Vec<String>,
     ) -> Self {
         Auction {
-            auction_id,
             item_name,
             start_time,
             end_time,
@@ -51,6 +56,7 @@ impl Auction {
             active: true,
             user_id,
             signature,
+            subscribers,
         }
     }
 }
@@ -84,14 +90,13 @@ pub fn save_auction_data(
     Ok(())
 }
 
-pub async fn load_auction_data() -> Result<AuctionHouse, Box<dyn std::error::Error>> {
-    let data = fs::read_to_string("/auctions/auction_data.json")?;
-    let auctions: AuctionHouse = serde_json::from_str(&data)?;
-    Ok(auctions)
-}
-
 pub async fn list_auctions() -> AuctionHouse {
     let result = get_files_in_directory("auctions");
+    println!(
+        "{:<150} {:<15} {:<10}  {:<10} {:<10}",
+        "ID", "Auction Name", "End Time", "bidding price", "Auction State"
+    );
+    println!("-------------------------------------------------------------------------------------------------------------------------------");
     match result {
         Ok(n) => {
             let auction_house = build_auctions_from_files(&n).await;
@@ -102,15 +107,23 @@ pub async fn list_auctions() -> AuctionHouse {
                 } else {
                     bidding_price = auction.bids[auction.bids.len() - 1].amount;
                 }
-
                 println!(
-                    "id: {} auction_name: {}, end_time:{}, biding_price: {:?}, auction_state:{}",
-                    auction.auction_id,
+                    "{:<150} {:<15} {:<10} {:<10} {:<10} ",
+                    auction.signature,
                     auction.item_name,
                     auction.end_time,
                     bidding_price,
                     auction.active
-                )
+                );
+
+                // println!(
+                //     "\nID: {} auction_name: {}, end_time:{}, biding_price: {:?}, auction_state:{}",
+                //     auction.signature,
+                //     auction.item_name,
+                //     auction.end_time,
+                //     bidding_price,
+                //     auction.active
+                // )
             }
             auction_house
         }
