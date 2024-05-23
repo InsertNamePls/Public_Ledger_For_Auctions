@@ -107,7 +107,7 @@ pub async fn find_auction_to_bid(
                         .contains(&requester_addr)
                     {
                         println!(
-                            "New subscriber {} to auction: {}",
+                            "New subscriber {} to auction: {}\n",
                             requester_addr.clone(),
                             auction_house.auctions[target_auction_position].signature
                         );
@@ -131,7 +131,7 @@ pub async fn find_auction_to_bid(
             }
         }
     } else {
-        println!("Auction not present, sending to peers");
+        println!("Auction not present, sending to peers\n");
         //
         let dest_ip = routing_table
             .get(0)
@@ -145,7 +145,10 @@ pub async fn find_auction_to_bid(
 
         match send_transaction(transaction, dest_ip.clone()).await {
             Ok(result) => {
-                println!("Transaction generated -> {:?} ", result);
+                println!(
+                    "Dispaching Transaction to peer:{:?} {:?} ",
+                    &dest_ip, result
+                );
             }
             Err(e) => {
                 println!("error {}", e);

@@ -339,7 +339,6 @@ async fn create_auction(user: &User, dest_ip: &Vec<String>, private_key: Signing
         .expect("error geting acution from peers");
 
     let auction_house = list_auctions().await;
-    println!("local auction house {:?}\n\n", auction_house.clone());
 
     let signed_content =
         digest(item_name.trim().to_string() + &starting_bid.to_string() + &user.uid.clone());
@@ -356,7 +355,6 @@ async fn create_auction(user: &User, dest_ip: &Vec<String>, private_key: Signing
         hex::encode(signature.to_bytes()),
         vec![],
     );
-    println!("{:?}", auction.clone());
 
     send_transaction(Transaction::Auction(auction.clone()), dest_ip[0].clone())
         .await

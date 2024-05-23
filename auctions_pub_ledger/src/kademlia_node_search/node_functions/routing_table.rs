@@ -1,17 +1,28 @@
+use crate::kademlia_node_search::config::{K, MAX_NODES_PER_IP, N_BITS, REPUTATION_THRESHOLD};
+
 use crate::kademlia::NodeInfo as ProtoNodeInfo;
 use bytes::Bytes;
+use colored::Colorize;
 use rand::seq::IteratorRandom;
 use rand::thread_rng;
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 use std::net::SocketAddr;
-
-const K: usize = 20; // The maximum number of nodes in a bucket
-const N_BITS: usize = 160; // The number of bits in the node ID
 
 #[derive(Clone, Debug)]
 pub struct NodeInfo {
     pub(crate) id: Bytes,
     pub addr: SocketAddr,
+    pub(crate) reputation: i32,
+}
+
+impl NodeInfo {
+    pub fn new(id: Bytes, addr: SocketAddr) -> Self {
+        Self {
+            id,
+            addr,
+            reputation: 0,
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -32,12 +43,17 @@ impl Bucket {
         }
         self.nodes.push_back(node);
     }
+
+    pub fn remove(&mut self, node_id: &Bytes) {
+        self.nodes.retain(|node| &node.id != node_id);
+    }
 }
 
 #[derive(Debug)]
 pub struct RoutingTable {
     pub buckets: Vec<Bucket>,
-    own_id: Bytes, // Store the node's own ID for reference
+    own_id: Bytes,
+    banned_ids: HashMap<Bytes, ()>,
 }
 
 impl RoutingTable {
@@ -45,6 +61,7 @@ impl RoutingTable {
         Self {
             buckets: vec![Bucket::new(); N_BITS],
             own_id,
+            banned_ids: HashMap::new(),
         }
     }
 
@@ -62,14 +79,67 @@ impl RoutingTable {
         result
     }
 
+    fn count_nodes_by_ip(&self, ip: &str) -> usize {
+        self.buckets
+            .iter()
+            .flat_map(|bucket| &bucket.nodes)
+            .filter(|node_info| node_info.addr.ip().to_string() == ip)
+            .count()
+    }
+
     pub fn add_node(&mut self, node: NodeInfo, own_id: &Bytes) {
         if node.id == self.own_id {
             return;
         }
+
+        let node_ip = node.addr.ip().to_string();
+        if self.count_nodes_by_ip(&node_ip) >= MAX_NODES_PER_IP {
+            println!(
+                "{}",
+                format!(
+                    "Node from IP {} exceeds the maximum allowed limit of {} nodes.",
+                    node_ip, MAX_NODES_PER_IP
+                )
+                .yellow()
+            );
+            return;
+        }
+
+        if self.banned_ids.contains_key(&node.id) {
+            println!(
+                "{}",
+                format!(
+                    "Node with ID {:x} is banned and cannot be re-added.",
+                    node.id
+                )
+                .yellow()
+            );
+            return;
+        }
+
         let bucket_index = self.calculate_bucket_index(&node.id, own_id);
         self.buckets[bucket_index].add(node);
     }
 
+    pub fn remove_node(&mut self, node_id: &Bytes) {
+        let bucket_index = self.calculate_bucket_index(node_id, &self.own_id);
+        self.buckets[bucket_index].remove(node_id);
+    }
+
+    pub fn adjust_reputation(&mut self, node_id: &Bytes, adjustment: i32) {
+        let bucket_index = self.calculate_bucket_index(node_id, &self.own_id);
+        for node in self.buckets[bucket_index].nodes.iter_mut() {
+            if &node.id == node_id {
+                node.reputation += adjustment;
+                if node.reputation < REPUTATION_THRESHOLD {
+                    println!("{}", format!("Node {:x} has reputation below the threshold. Removing from routing table.", node_id).red());
+                    self.banned_ids.insert(node_id.clone(), ());
+                    self.remove_node(node_id);
+                }
+                break;
+            }
+        }
+    }
     pub fn find_closest(&self, target_id: &Bytes) -> Vec<NodeInfo> {
         let primary_index = self.calculate_bucket_index(target_id, &self.own_id);
         let mut closest_nodes = Vec::new();
@@ -104,7 +174,7 @@ impl RoutingTable {
                 .address
                 .parse()
                 .expect("Failed to parse SocketAddr");
-            let node_info = NodeInfo { id, addr };
+            let node_info = NodeInfo::new(id, addr);
             nodes.push(node_info);
         }
         nodes
@@ -116,6 +186,17 @@ impl RoutingTable {
             .flat_map(|bucket| &bucket.nodes) // Iterate over all nodes in all buckets
             .filter(|node_info| node_info.id != self.own_id) // Exclude the node's own ID
             .choose(&mut thread_rng()) // Randomly select one node
+    }
+
+    pub fn random_nodes(&self, n: usize) -> Vec<NodeInfo> {
+        self.buckets
+            .iter()
+            .flat_map(|bucket| &bucket.nodes)
+            .filter(|node_info| node_info.id != self.own_id)
+            .choose_multiple(&mut thread_rng(), n) // Randomly select n nodes
+            .into_iter() // Convert the Vec<&NodeInfo> into an iterator
+            .cloned() // Clone each NodeInfo to get Vec<NodeInfo>
+            .collect()
     }
 
     // Function to check if a node is already in the routing table
@@ -144,3 +225,4 @@ impl RoutingTable {
         }
     }
 }
+

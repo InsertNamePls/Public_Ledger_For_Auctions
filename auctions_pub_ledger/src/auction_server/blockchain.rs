@@ -153,7 +153,7 @@ pub async fn block_generator(
 
     block.mine_block(4);
 
-    println!("generated_block -> {:?}\n", block);
+    println!("Generated Block: {:?}\n", block);
     block
 }
 

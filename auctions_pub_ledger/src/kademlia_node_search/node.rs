@@ -1,18 +1,16 @@
-use crate::kademlia::kademlia_server::{Kademlia, KademliaServer};
-use crate::kademlia::{
-    FindNodeRequest, FindNodeResponse, FindValueRequest, FindValueResponse, PingRequest,
-    PingResponse, StoreRequest, StoreResponse,
-};
-
 use super::node_functions::client::Client;
 use super::node_functions::crypto::Crypto;
 use super::node_functions::request_handler::RequestHandler;
 use super::node_functions::routing_table::NodeInfo;
 use super::node_functions::routing_table::RoutingTable;
-
+use crate::kademlia::kademlia_server::{Kademlia, KademliaServer};
+use crate::kademlia::{
+    FindNodeRequest, FindNodeResponse, FindValueRequest, FindValueResponse, PingRequest,
+    PingResponse, StoreRequest, StoreResponse,
+};
 use bytes::Bytes;
 use colored::*;
-use rand_chacha::rand_core::SeedableRng;
+use rand_core::SeedableRng;
 use rand_distr::{Distribution, Uniform};
 use ring::digest::{digest, SHA256};
 use ring::signature;
@@ -26,7 +24,12 @@ use tokio::time::Duration;
 use tonic::transport::Server;
 use tonic::{Request, Response, Status};
 //Config Constants
-use super::config::{C1, LOG_INTERVAL, REFRESH_TIMER_LOWER, REFRESH_TIMER_UPPER};
+
+use super::config::{
+    C1, LOG_INTERVAL, N, PING_TIMER_LOWER, PING_TIMER_UPPER, REFRESH_TIMER_LOWER,
+    REFRESH_TIMER_UPPER,
+};
+
 #[derive(Debug)]
 pub struct Node {
     pub keypair: signature::Ed25519KeyPair,
@@ -34,13 +37,15 @@ pub struct Node {
     pub addr: SocketAddr,
     pub storage: Mutex<HashMap<Bytes, Bytes>>,
     pub routing_table: Mutex<RoutingTable>,
+    pub crypto: Crypto,
+    pub client: Client,
 }
 
 impl Node {
     pub async fn new(
         addr: SocketAddr,
-        bootstrap_addr: Option<String>,
-    ) -> Result<Arc<Mutex<Self>>, Box<dyn std::error::Error>> {
+        bootstrap_addr: Option<&str>,
+    ) -> Result<Arc<Mutex<Self>>, Box<dyn std::error::Error + Send + Sync>> {
         let (keypair, node_id, duration, attempts) = Self::generate_id().await?;
         let routing_table = Mutex::new(RoutingTable::new(node_id.clone()));
 
@@ -51,6 +56,8 @@ impl Node {
             addr,
             storage: Mutex::new(HashMap::new()),
             routing_table,
+            crypto: Crypto::new(),
+            client: Client::new(),
         }));
 
         // Print out the generated node ID
@@ -64,7 +71,7 @@ impl Node {
                 "{}",
                 format!("Fetching routing table from bootstrap node: {}", addr).blue()
             );
-            node.lock().await.fetch_routing_table(&addr).await?;
+            node.lock().await.fetch_routing_table(addr).await?;
         }
 
         node.lock().await.routing_table.lock().await.print_table();
@@ -72,8 +79,10 @@ impl Node {
         Ok(node)
     }
 
-    async fn generate_id(
-    ) -> Result<(signature::Ed25519KeyPair, Bytes, Duration, u64), Box<dyn std::error::Error>> {
+    async fn generate_id() -> Result<
+        (signature::Ed25519KeyPair, Bytes, Duration, u64),
+        Box<dyn std::error::Error + Send + Sync>,
+    > {
         let c1 = C1; // Example difficulty level: number of leading zero bits
         let start_time = Instant::now();
         let mut attempts = 0;
@@ -113,35 +122,64 @@ impl Node {
     async fn fetch_routing_table(
         &self,
         target_addr: &str,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        let ping_request = Client::create_ping_request(&self.keypair, self.addr.to_string());
-        let ping_response =
-            Client::send_ping_request(ping_request, target_addr.to_string()).await?;
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        let ping_request =
+            self.client
+                .create_ping_request(&self.keypair, self.id.to_vec(), self.addr.to_string());
+        match self
+            .client
+            .send_ping_request(ping_request, target_addr.to_string())
+            .await
+        {
+            Ok(ping_response) => {
+                println!(
+                    "{}",
+                    format!("Received ping response: {:?}", ping_response).green()
+                );
 
-        println!(
-            "{}",
-            format!("Received ping response: {:?}", ping_response).green()
-        );
+                let find_node_request = self.client.create_find_node_request(
+                    &self.keypair,
+                    self.id.to_vec(),
+                    self.addr.to_string(),
+                    ping_response.node_id.to_vec(),
+                );
 
-        let find_node_request = Client::create_find_node_request(
-            &self.keypair,
-            self.id.to_vec(),
-            self.addr.to_string(),
-            ping_response.node_id.to_vec(),
-        );
-
-        let find_node_response =
-            Client::send_find_node_request(find_node_request, target_addr.to_string()).await?;
-
-        println!(
-            "{}",
-            format!("Received find_node response: {:?}", find_node_response).green()
-        );
-
-        self.update_routing_table(RoutingTable::from_proto_nodes(find_node_response.nodes))
-            .await;
-
-        Ok(())
+                match self
+                    .client
+                    .send_find_node_request(find_node_request, target_addr.to_string())
+                    .await
+                {
+                    Ok(find_node_response) => {
+                        println!(
+                            "{}",
+                            format!("Received find_node response: {:?}", find_node_response)
+                                .green()
+                        );
+                        self.update_routing_table(RoutingTable::from_proto_nodes(
+                            find_node_response.nodes,
+                        ))
+                        .await;
+                        Ok(())
+                    }
+                    Err(e) => {
+                        eprintln!("Failed to send find_node request: {}", e);
+                        self.routing_table
+                            .lock()
+                            .await
+                            .remove_node(&Bytes::from(target_addr.as_bytes().to_vec()));
+                        Err(Box::new(e))
+                    }
+                }
+            }
+            Err(e) => {
+                eprintln!("Failed to send ping request: {}", e);
+                self.routing_table
+                    .lock()
+                    .await
+                    .remove_node(&Bytes::from(target_addr.as_bytes().to_vec()));
+                Err(Box::new(e))
+            }
+        }
     }
 
     async fn update_routing_table(&self, nodes: Vec<NodeInfo>) {
@@ -153,7 +191,6 @@ impl Node {
                 routing_table.add_node(new_node, &self.id);
             }
         }
-
         println!("Added {} new nodes to the routing table", _counter);
     }
 
@@ -198,14 +235,26 @@ impl Node {
                         )
                         .green()
                     ),
-                    Err(e) => eprintln!(
-                        "{}",
-                        format!(
-                            "Failed to refresh routing table from {}: {}",
-                            node_info.addr, e
-                        )
-                        .red()
-                    ),
+                    Err(e) => {
+                        eprintln!(
+                            "{}",
+                            format!(
+                                "Failed to refresh routing table from {}: {}",
+                                node_info.addr, e
+                            )
+                            .red()
+                        );
+                        eprintln!(
+                            "{}",
+                            format!("Removing node {} from routing table", node_info.addr).yellow()
+                        );
+                        node.lock()
+                            .await
+                            .routing_table
+                            .lock()
+                            .await
+                            .remove_node(&node_info.id);
+                    }
                 }
             } else {
                 eprintln!(
@@ -214,6 +263,64 @@ impl Node {
                 );
             }
             node.lock().await.routing_table.lock().await.print_table();
+        }
+    }
+
+    async fn check_nodes_alive(node: Arc<Mutex<Node>>) {
+        let interval_range = Uniform::from(PING_TIMER_LOWER..PING_TIMER_UPPER);
+        let mut rng = rand_chacha::ChaChaRng::from_entropy(); // RNG should be outside the loop to preserve state and performance
+
+        loop {
+            let sleep_time = interval_range.sample(&mut rng);
+            println!(
+                "{}",
+                format!("Checking node liveness in {} seconds", sleep_time).cyan()
+            );
+            tokio::time::sleep(Duration::from_secs(sleep_time)).await;
+
+            // Lock only when needed and scope the lock to minimize blocking
+            let node_infos: Vec<NodeInfo> = {
+                let node_lock = node.lock().await;
+                let routing_table = node_lock.routing_table.lock().await;
+                routing_table.random_nodes(N) // Get N random nodes
+            };
+
+            for node_info in node_infos {
+                println!("{}", format!("Pinging node: {:?}", node_info.addr).cyan());
+                // Send ping request outside of the node locks
+                let result = {
+                    let node_lock = node.lock().await;
+                    let ping_request = node_lock.client.create_ping_request(
+                        &node_lock.keypair,
+                        node_lock.id.to_vec(),
+                        node_lock.addr.to_string(),
+                    );
+                    node_lock
+                        .client
+                        .send_ping_request(ping_request, node_info.addr.to_string())
+                        .await
+                };
+
+                match result {
+                    Ok(_) => println!("{}", format!("Node {} is alive", node_info.addr).green()),
+                    Err(e) => {
+                        eprintln!(
+                            "{}",
+                            format!("Node {} is unreachable: {}", node_info.addr, e).red()
+                        );
+                        eprintln!(
+                            "{}",
+                            format!("Removing node {} from routing table", node_info.addr).yellow()
+                        );
+                        node.lock()
+                            .await
+                            .routing_table
+                            .lock()
+                            .await
+                            .remove_node(&node_info.id);
+                    }
+                }
+            }
         }
     }
 }
@@ -267,13 +374,25 @@ impl Kademlia for Arc<Mutex<Node>> {
     }
 }
 
-pub async fn run_server(addr: SocketAddr, node: Arc<Mutex<Node>>) {
-    tokio::spawn(Node::refresh_routing_table(node.clone()));
+pub async fn run_server(
+    addr: SocketAddr,
+    node: Arc<Mutex<Node>>,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let node_clone_for_server = Arc::clone(&node);
+    tokio::spawn(async move {
+        Node::refresh_routing_table(node_clone_for_server.clone()).await;
+    });
 
-    println!("{}", format!("Server listening on {}", addr).green());
+    let node_clone_for_checking = Arc::clone(&node);
+    tokio::spawn(async move {
+        Node::check_nodes_alive(node_clone_for_checking.clone()).await;
+    });
+
+    println!("{}", format!("Server listening on {:?}", addr).green());
     Server::builder()
         .add_service(KademliaServer::new(Arc::clone(&node.clone())))
         .serve(addr)
-        .await
-        .unwrap();
+        .await?;
+
+    Ok(())
 }

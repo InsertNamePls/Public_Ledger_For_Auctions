@@ -26,7 +26,10 @@ async fn destributed_auction_operator(
 ) {
     let shared_blockchain_vector = Arc::new(Mutex::new(blockchain_vector));
     println!("{:?}", bootstrap_addr.cloned());
-    let kademlia_node: Arc<Mutex<Node>> = Node::new(addr, bootstrap_addr.cloned()).await.unwrap();
+    let kademlia_node: Arc<Mutex<Node>> =
+        Node::new(addr.clone(), bootstrap_addr.map(|x| x.as_str()))
+            .await
+            .unwrap();
     // initialize auction house by importing from file
     let data = fs::read_to_string("auction_data.json").expect("Unable to read file");
     let auction_house: AuctionHouse =
@@ -45,7 +48,8 @@ async fn destributed_auction_operator(
         mining_type.cloned(),
     ));
     let task3 = task::spawn(blockchain_server(shared_blockchain_vector.clone()));
-    let task4 = task::spawn(run_server(addr, kademlia_node.clone()));
+    let addr_str = addr.clone().to_string();
+    let task4 = task::spawn(run_server(addr.clone(), kademlia_node.clone()));
     //let task5 = task::spawn(loop_func(kademlia_node.clone()));
     task1.await.unwrap();
     task2.await.unwrap();
