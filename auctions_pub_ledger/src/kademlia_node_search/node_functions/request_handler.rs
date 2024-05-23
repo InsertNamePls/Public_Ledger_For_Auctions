@@ -1,21 +1,16 @@
-use crate::kademlia_node_search::node::Node;
-
-use std::net::SocketAddr;
-use std::sync::Arc;
-use tokio::sync::Mutex;
-use tonic::{Request, Response, Status};
-
-use super::client::Client;
 use super::routing_table::NodeInfo;
 use crate::kademlia::{
     FindNodeRequest, FindNodeResponse, FindValueRequest, FindValueResponse,
     NodeInfo as ProtoNodeInfo, PingRequest, PingResponse, StoreRequest, StoreResponse,
 };
+use crate::kademlia_node_search::node::Node;
 use bytes::Bytes;
 use colored::*;
 use hex::ToHex;
-
-use super::crypto::Crypto;
+use std::net::SocketAddr;
+use std::sync::Arc;
+use tokio::sync::Mutex;
+use tonic::{Request, Response, Status};
 
 pub struct RequestHandler;
 
@@ -25,15 +20,23 @@ impl RequestHandler {
         request: Request<PingRequest>,
     ) -> Result<Response<PingResponse>, Status> {
         let ping_request = request.into_inner();
-        let node_address = ping_request.node_address;
         let timestamp = ping_request.timestamp;
-        //Message is always the concatenation of the node's address and the timestamp
-        let message = format!("{}{}", node_address, timestamp).into_bytes();
+        let nonce = ping_request.nonce;
+        let requester_id = Bytes::from(ping_request.requester_node_id.clone());
+
+        // Message is always the concatenation of the node's timestamp and the public key and id
+        let message = format!(
+            "{}{:?}{:?}",
+            ping_request.timestamp, ping_request.sender_public_key, ping_request.requester_node_id
+        )
+        .into_bytes();
         let sender_public_key = ping_request.sender_public_key.as_ref();
 
-        // Ensure the signature is valid to prevent impersonation and replay attacks
-        if Crypto::validate_request(
+        // Ensure the request is valid
+        if node.lock().await.crypto.validate_request(
             timestamp,
+            nonce,
+            &requester_id,
             &message,
             &ping_request.signature,
             sender_public_key,
@@ -43,9 +46,18 @@ impl RequestHandler {
                 is_online: true,
                 node_id: node.id.clone().to_vec(),
             };
+            node.routing_table
+                .lock()
+                .await
+                .adjust_reputation(&requester_id, 1);
             Ok(Response::new(response))
         } else {
-            Err(Status::unauthenticated("Invalid signature"))
+            let node = node.lock().await;
+            node.routing_table
+                .lock()
+                .await
+                .adjust_reputation(&requester_id, -1);
+            Err(Status::unauthenticated("Invalid request"))
         }
     }
 
@@ -54,19 +66,43 @@ impl RequestHandler {
         request: Request<StoreRequest>,
     ) -> Result<Response<StoreResponse>, Status> {
         let store_request = request.into_inner();
-        let key = Bytes::from(store_request.key.clone()); // Clone to use later for forwarding
+        let key = Bytes::from(store_request.key.clone());
         let value = Bytes::from(store_request.value.clone());
+        let nonce = store_request.nonce;
+        let requester_id = Bytes::from(store_request.requester_node_id.clone());
+        let timestamp = store_request.timestamp;
+
+        // Message is always the concatenation of the node's timestamp and the public key and id
+        let message = format!(
+            "{}{:?}{:?}",
+            store_request.timestamp,
+            store_request.sender_public_key,
+            store_request.requester_node_id
+        )
+        .into_bytes();
+
+        // Ensure the request is valid
+        if !node.lock().await.crypto.validate_request(
+            timestamp,
+            nonce,
+            &requester_id,
+            &message,
+            &store_request.signature,
+            &store_request.sender_public_key,
+        ) {
+            let node = node.lock().await;
+            node.routing_table
+                .lock()
+                .await
+                .adjust_reputation(&requester_id, -1);
+            return Err(Status::unauthenticated("Invalid request"));
+        }
 
         let node = node.lock().await;
-        // Access local storage to check for the key and possibly store it
         let mut storage = node.storage.lock().await;
         let should_forward = match storage.get(&key) {
-            Some(existing_value) if existing_value == &value => {
-                // If the key exists with the same value, do not forward
-                false
-            }
+            Some(existing_value) if existing_value == &value => false,
             _ => {
-                // Insert the key-value pair into the local storage
                 storage.insert(key.clone(), value.clone());
                 let key_hex = format!("{:x}", key);
                 let value_hex = format!("{:x}", value);
@@ -74,26 +110,43 @@ impl RequestHandler {
                     "Added <key:value> to local storage: <{}:{}>",
                     key_hex, value_hex
                 );
-                true // Forward the request as this is new or updated information
+                node.routing_table
+                    .lock()
+                    .await
+                    .adjust_reputation(&requester_id, 1);
+                true
             }
         };
 
-        // Forward the store request to closest nodes only if it's new or updated information
         if should_forward {
             let closest_nodes = {
                 let routing_table = node.routing_table.lock().await;
                 routing_table.find_closest(&key)
             };
 
+            let client = node.client.clone(); // clone the client for use within the async block
+
             for node_info in closest_nodes.iter() {
                 let client_addr = node_info.addr.to_string();
-                let forward_store_request =
-                    Client::create_store_node_request(&node.keypair, key.to_vec(), value.to_vec());
 
-                // Skip sending to self
+                let forward_store_request = client.create_store_node_request(
+                    &node.keypair,    // use the current node's keypair
+                    node.id.to_vec(), // use the current node's id
+                    key.to_vec(),
+                    value.to_vec(),
+                );
+
                 if client_addr != node.addr.to_string() {
+                    let client_clone = node.client.clone();
                     tokio::spawn(async move {
-                        Client::send_store_request(forward_store_request, client_addr).await;
+                        let result = client_clone
+                            .send_store_request(forward_store_request, client_addr.clone())
+                            .await;
+                        if let Err(e) = result {
+                            eprintln!("Failed to forward store request to {}: {}", client_addr, e);
+                        } else {
+                            println!("Successfully forwarded store request to {}", client_addr);
+                        }
                     });
                 }
             }
@@ -108,10 +161,42 @@ impl RequestHandler {
     ) -> Result<Response<FindNodeResponse>, Status> {
         let find_node_request = request.into_inner();
         let target_id = Bytes::from(find_node_request.target_node_id.clone());
-        let requester_id = Bytes::from(find_node_request.requester_node_id);
-        let requester_address = find_node_request.requester_node_address;
+        let requester_id = Bytes::from(find_node_request.requester_node_id.clone());
+        let requester_address = find_node_request.requester_node_address.clone();
+        let nonce = find_node_request.nonce;
+        let timestamp = find_node_request.timestamp;
+
+        // Message is always the concatenation of the node's timestamp and the public key and id
+        let message = format!(
+            "{}{:?}{:?}",
+            find_node_request.timestamp,
+            find_node_request.sender_public_key,
+            find_node_request.requester_node_id
+        )
+        .into_bytes();
+
+        // Ensure the request is valid
+        if !node.lock().await.crypto.validate_request(
+            timestamp,
+            nonce,
+            &requester_id,
+            &message,
+            &find_node_request.signature,
+            &find_node_request.sender_public_key,
+        ) {
+            let node = node.lock().await;
+            node.routing_table
+                .lock()
+                .await
+                .adjust_reputation(&requester_id, -1);
+            return Err(Status::unauthenticated("Invalid request"));
+        }
 
         let node = node.lock().await;
+        node.routing_table
+            .lock()
+            .await
+            .adjust_reputation(&requester_id, 1);
         println!(
             "{}",
             format!(
@@ -123,21 +208,17 @@ impl RequestHandler {
             .blue()
         );
 
-        // Retrieve the closest nodes from the routing table
         let closest_nodes = {
             let routing_table = node.routing_table.lock().await;
             routing_table.find_closest(&target_id)
         };
 
-        // Check if the requester's node info is already in the routing table
         let mut routing_table = node.routing_table.lock().await;
         if !routing_table.contains(&requester_id) {
-            let requester_node_info = NodeInfo {
-                id: requester_id,
-                addr: requester_address.parse::<SocketAddr>().unwrap(), // Assumption: the address is valid and can be parsed
-            };
-
-            // Try adding the requester to the routing table
+            let requester_node_info = NodeInfo::new(
+                requester_id.clone(),
+                requester_address.parse::<SocketAddr>().unwrap(),
+            );
             routing_table.add_node(requester_node_info, &node.id);
             println!(
                 "{}",
@@ -147,7 +228,6 @@ impl RequestHandler {
             routing_table.print_table();
         }
 
-        // Prepare the response with the found nodes
         let proto_nodes = closest_nodes
             .iter()
             .map(|node_info| ProtoNodeInfo {
@@ -165,8 +245,41 @@ impl RequestHandler {
     ) -> Result<Response<FindValueResponse>, Status> {
         let find_value_request = request.into_inner();
         let key = Bytes::from(find_value_request.key);
+        let nonce = find_value_request.nonce;
+        let requester_id = Bytes::from(find_value_request.requester_node_id.clone());
+        let timestamp = find_value_request.timestamp;
+
+        // Message is always the concatenation of the node's timestamp and the public key and id
+        let message = format!(
+            "{}{:?}{:?}",
+            find_value_request.timestamp,
+            find_value_request.sender_public_key,
+            find_value_request.requester_node_id
+        )
+        .into_bytes();
+
+        // Ensure the request is valid
+        if !node.lock().await.crypto.validate_request(
+            timestamp,
+            nonce,
+            &requester_id,
+            &message,
+            &find_value_request.signature,
+            &find_value_request.sender_public_key,
+        ) {
+            let node = node.lock().await;
+            node.routing_table
+                .lock()
+                .await
+                .adjust_reputation(&requester_id, -1);
+            return Err(Status::unauthenticated("Invalid request"));
+        }
 
         let node = node.lock().await;
+        node.routing_table
+            .lock()
+            .await
+            .adjust_reputation(&requester_id, 1);
         println!("{}", format!("Key requested: {:?}", key).yellow());
 
         let storage = node.storage.lock().await;

@@ -2,12 +2,11 @@ use super::node_functions::client::Client;
 use super::node_functions::crypto::Crypto;
 use bytes::Bytes;
 use rand::RngCore;
-use ring::signature::KeyPair;
-use tonic::transport::Channel;
-
 pub async fn run_client(target: &str, command: &str) -> Result<(), Box<dyn std::error::Error>> {
     // Generate keypair
     let keypair = Crypto::create_keypair()?;
+    let client = Client::new();
+    let id = generate_bytes(20).to_vec();
 
     match command {
         "store" => {
@@ -25,8 +24,10 @@ pub async fn run_client(target: &str, command: &str) -> Result<(), Box<dyn std::
             let value = Bytes::from(value_bytes);
 
             let store_request =
-                Client::create_store_node_request(&keypair, key.to_vec(), value.to_vec());
-            let response = Client::send_store_request(store_request, target.to_string()).await?;
+                client.create_store_node_request(&keypair, id, key.to_vec(), value.to_vec());
+            let response = client
+                .send_store_request(store_request, target.to_string())
+                .await?;
 
             println!("Store response: {:?}", response);
         }
@@ -38,9 +39,10 @@ pub async fn run_client(target: &str, command: &str) -> Result<(), Box<dyn std::
             let key_bytes = key_input.trim().to_string().into_bytes();
             let key = Bytes::from(key_bytes);
 
-            let find_value_request = Client::create_find_value_request(&keypair, key.to_vec());
-            let response =
-                Client::send_find_value_request(find_value_request, target.to_string()).await?;
+            let find_value_request = client.create_find_value_request(&keypair, id, key.to_vec());
+            let response = client
+                .send_find_value_request(find_value_request, target.to_string())
+                .await?;
 
             println!("Find value response: {:?}", response);
         }
@@ -53,21 +55,25 @@ pub async fn run_client(target: &str, command: &str) -> Result<(), Box<dyn std::
                 .expect("Invalid hex input for target node ID");
             let target_node_id = Bytes::from(target_node_id_bytes);
 
-            let find_node_request = Client::create_find_node_request(
+            let find_node_request = client.create_find_node_request(
                 &keypair,
-                keypair.public_key().as_ref().to_vec(),
+                id,
                 "127.0.0.1:10020".to_string(),
                 target_node_id.to_vec(),
             );
 
-            let response =
-                Client::send_find_node_request(find_node_request, target.to_string()).await?;
+            let response = client
+                .send_find_node_request(find_node_request, target.to_string())
+                .await?;
 
             println!("Find node response: {:?}", response);
         }
         "ping" => {
-            let ping_request = Client::create_ping_request(&keypair, "127.0.0.1:10020".to_string());
-            let response = Client::send_ping_request(ping_request, target.to_string()).await?;
+            let ping_request =
+                client.create_ping_request(&keypair, id, "127.0.0.1:10020".to_string());
+            let response = client
+                .send_ping_request(ping_request, target.to_string())
+                .await?;
 
             println!("Ping response: {:?}", response);
         }

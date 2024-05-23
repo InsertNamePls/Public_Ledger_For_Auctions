@@ -20,8 +20,7 @@ pub async fn block_handler(
                 if let Some(target_blockchain) = active_blockchains.get_mut(i) {
                     target_blockchain.blocks.push(block.clone());
                 }
-                println!("updated blockchain {:?}", blockchain);
-                println!("active blockchains {:?}", active_blockchains);
+                println!("active blockchains {:?}\n", active_blockchains);
                 break;
             }
         }
@@ -63,7 +62,7 @@ pub async fn blockchain_handler(shared_blockchain_vector: &mut Arc<Mutex<Vec<Blo
         }
     }
     println!(
-        "Biggest blockchain in the system has {:?} blocks",
+        "Biggest blockchain in the system has {:?} blocks\n",
         biggest_blockchain_len
     );
     // create 2 vectors that one contains the active blockchains and the other that has the

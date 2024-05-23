@@ -92,6 +92,11 @@ pub fn save_auction_data(
 
 pub async fn list_auctions() -> AuctionHouse {
     let result = get_files_in_directory("auctions");
+    println!(
+        "{:<150} {:<15} {:<10}  {:<10} {:<10}",
+        "ID", "Auction Name", "End Time", "bidding price", "Auction State"
+    );
+    println!("-------------------------------------------------------------------------------------------------------------------------------");
     match result {
         Ok(n) => {
             let auction_house = build_auctions_from_files(&n).await;
@@ -102,11 +107,23 @@ pub async fn list_auctions() -> AuctionHouse {
                 } else {
                     bidding_price = auction.bids[auction.bids.len() - 1].amount;
                 }
-
                 println!(
-                    "signature: {} auction_name: {}, end_time:{}, biding_price: {:?}, auction_state:{}",
-                    auction.signature, auction.item_name, auction.end_time, bidding_price, auction.active
-                )
+                    "{:<150} {:<15} {:<10} {:<10} {:<10} ",
+                    auction.signature,
+                    auction.item_name,
+                    auction.end_time,
+                    bidding_price,
+                    auction.active
+                );
+
+                // println!(
+                //     "\nID: {} auction_name: {}, end_time:{}, biding_price: {:?}, auction_state:{}",
+                //     auction.signature,
+                //     auction.item_name,
+                //     auction.end_time,
+                //     bidding_price,
+                //     auction.active
+                // )
             }
             auction_house
         }

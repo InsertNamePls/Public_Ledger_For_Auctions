@@ -46,9 +46,8 @@ pub async fn auctions_validator(
                 tx.push(auction.signature.to_string());
 
                 auction.active = false;
-                println!("auction expired -> {:?}", auction);
+                println!("Auction expired: {:?}", auction.signature);
                 byte_count += &auction.signature.as_bytes().len();
-                println!("{}", byte_count);
                 if byte_count >= 5 {
                     let new_block = block_generator(shared_blockchain_vector.clone(), tx).await;
 
@@ -79,10 +78,6 @@ pub async fn auctions_validator(
                                 match handle_puzzle_result.await {
                                     Ok(Ok((solution_result, peer_ip))) => {
                                         if solution_result == puzzle_solution_set {
-                                            println!(
-                                                "Node finnished the puzzle successfully: {}",
-                                                peer_ip.clone()
-                                            );
                                             peer_puzzle_winner = peer_ip;
                                             break;
                                         }
@@ -92,7 +87,7 @@ pub async fn auctions_validator(
                                 }
                             }
                             if !peer_puzzle_winner.is_empty() {
-                                println!("Puzzle WINNER: {}", peer_puzzle_winner);
+                                println!("Puzzle WINNER: {}\n", peer_puzzle_winner);
                                 // send block to the first node that retrieves the puzzle corretly
                                 let result_peer_validation = block_peer_validator_client(
                                     new_block.clone(),
@@ -101,7 +96,7 @@ pub async fn auctions_validator(
                                 .await
                                 .expect("error getting validation from peer");
                                 println!(
-                                    "validation {}-> {}",
+                                    "Peer validation {}: {}",
                                     &peer_puzzle_winner, result_peer_validation
                                 );
                                 list_peer_validation.push(result_peer_validation);
@@ -135,7 +130,6 @@ pub async fn auctions_validator(
                     }
 
                     tx = Vec::new();
-                    println!("{:?}", list_peer_validation);
                     if result_validation
                         && list_peer_validation
                             .iter()
