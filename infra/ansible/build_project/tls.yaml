@@ -1,0 +1,23 @@
+---
+- hosts: 127.0.0.1
+  connection: local
+  vars_files:
+    - ../../cloud_configuration.yml
+  tasks:
+    - name: create inventory file
+      tags: tls
+      shell: |
+        openssl req -x509 \
+          -sha256 -days 356 \
+          -nodes \
+          -newkey rsa:2048 \
+          -subj "/CN=auctionsdht.fc.up.pt/" \
+          -keyout ../../certificates/rootCA.key -out ../../certificates/rootCA.crt
+        openssl genrsa -out ../../certificates/server.key 2048
+        openssl req -new -key ../../certificates/server.key -out ../../certificates/server.csr -config ../../certificates/csr.conf
+        openssl x509 -req \
+          -in ../../certificates/server.csr \
+          -CA ../../certificates/rootCA.crt -CAkey ../../certificates/rootCA.key \
+          -CAcreateserial -out ../../certificates/server.crt \
+          -days 365 \
+          -sha256 -extfile ../../certificates/cert.conf

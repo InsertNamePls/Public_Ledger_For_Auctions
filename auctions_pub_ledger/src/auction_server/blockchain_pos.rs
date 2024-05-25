@@ -1,13 +1,12 @@
 use crate::auction_server::blockchain::Blockchain;
 use crate::auction_server::blockchain_operation::client::blockchain_client_async;
 use crate::blockchain_grpc::ProofOfStakePuzzleRequest;
+use colored::*;
 use rand::{distributions::Alphanumeric, Rng};
 use serde::{Deserialize, Serialize};
 use sha256::digest;
 use std::vec::Vec;
 use std::{fs, usize};
-use tokio::sync::watch::error;
-use tonic::transport::Error;
 const DIFICULTY: usize = 2;
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -35,7 +34,7 @@ impl Puzzle {
             .take(20)
             .map(char::from)
             .collect();
-        println!("{}", puzzle_str.clone());
+        println!("{}", format!(" Nounce: {}", puzzle_str.clone()).blue());
         let target = "0".repeat(DIFICULTY);
         loop {
             if !puzzle.code.starts_with(&target) {
@@ -59,7 +58,7 @@ pub async fn puzzle_builder() -> (PuzzleSet, PuzzleSet) {
     };
 
     for i in 0..5 {
-        print!("Building PoS puzzle: {}", i);
+        print!("{}", format!("Building PoS puzzle: {}", i).blue());
         let mut puzzle = Puzzle::new();
         Puzzle::generate_puzzle(&mut puzzle);
         puzzle_solution_set.puzzle_list.push(puzzle.clone());

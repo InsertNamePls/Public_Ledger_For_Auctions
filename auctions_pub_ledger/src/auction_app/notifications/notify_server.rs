@@ -3,7 +3,7 @@ use crate::auction_app::auction::Notification;
 use crate::notification_tx::notification_tx_server::NotificationTx;
 use crate::notification_tx::notification_tx_server::NotificationTxServer;
 use crate::notification_tx::{SendNotificationRequest, SendNotificationResponse};
-use std::{fs, io};
+use std::fs;
 use tonic::{
     transport::{Identity, Server, ServerTlsConfig},
     Request, Response, Status,
@@ -21,9 +21,8 @@ impl NotificationTx for NotificationServer {
     ) -> NotificationTxResult<SendNotificationResponse> {
         let message = request.into_inner().clone().notification;
         let bid: Bid = serde_json::from_str(&message).unwrap();
-        println!("{:?}", bid);
         println!(
-            "New notification!\n Bid submited by: {}\n Auction: {}\n Amount: {}\n",
+            "\nNew notification!\nBid submited by: {}\nAuction: {}\nbidding value: {}\n",
             bid.bidder, bid.signature, bid.amount
         );
         let notification = Notification {

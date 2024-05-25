@@ -1,4 +1,5 @@
 use crate::auction_app::auction::AuctionHouse;
+use crate::auction_app::auction_operation::client::update_user;
 use crate::auction_server::blockchain::block_generator;
 use crate::auction_server::blockchain::Blockchain;
 use crate::auction_server::blockchain_operator::block_peer_validator_client;
@@ -6,8 +7,8 @@ use crate::auction_server::blockchain_pos::{pos_miner_puzzle, puzzle_builder};
 use crate::auction_server::blockchain_pow::{block_handler, blockchain_handler};
 use crate::kademlia_node_search::node::Node;
 use crate::kademlia_node_search::node_functions::routing_table::Bucket;
-
 use chrono::Utc;
+use colored::*;
 use std::sync::Arc;
 use std::vec::Vec;
 use tokio::sync::Mutex;
@@ -42,11 +43,17 @@ pub async fn auctions_validator(
                 && !auction.bids.is_empty()
                 && auction.active
             {
+                // update winning user
+                let _ = update_user("10.10.0.2", &auction.bids.last().unwrap()).await;
+
                 // insert into transaction vector
                 tx.push(auction.signature.to_string());
 
                 auction.active = false;
-                println!("Auction expired: {:?}", auction.signature);
+                println!(
+                    "{}",
+                    format!("Auction expired: {:?}\n", auction.signature).blue()
+                );
                 byte_count += &auction.signature.as_bytes().len();
                 if byte_count >= 5 {
                     let new_block = block_generator(shared_blockchain_vector.clone(), tx).await;
@@ -60,7 +67,6 @@ pub async fn auctions_validator(
                     match validation_type.as_ref() {
                         Some(s) if s == "pos" => {
                             // create puzzle with solution
-                            //
                             let mut peer_puzzle_winner = "".to_string();
                             let (puzzle_set, puzzle_solution_set) = puzzle_builder().await;
                             let mut handle_puzzle_results = Vec::new();
@@ -87,7 +93,10 @@ pub async fn auctions_validator(
                                 }
                             }
                             if !peer_puzzle_winner.is_empty() {
-                                println!("Puzzle WINNER: {}\n", peer_puzzle_winner);
+                                println!(
+                                    "{}",
+                                    format!("Node Puzzle Winner: {}\n", peer_puzzle_winner).green()
+                                );
                                 // send block to the first node that retrieves the puzzle corretly
                                 let result_peer_validation = block_peer_validator_client(
                                     new_block.clone(),
@@ -96,8 +105,12 @@ pub async fn auctions_validator(
                                 .await
                                 .expect("error getting validation from peer");
                                 println!(
-                                    "Peer validation {}: {}",
-                                    &peer_puzzle_winner, result_peer_validation
+                                    "{}",
+                                    format!(
+                                        "Peer validation {}: {}\n",
+                                        &peer_puzzle_winner, result_peer_validation
+                                    )
+                                    .green()
                                 );
                                 list_peer_validation.push(result_peer_validation);
                             }

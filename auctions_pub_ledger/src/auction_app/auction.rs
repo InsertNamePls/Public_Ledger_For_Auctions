@@ -1,6 +1,5 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-
 use std::{fs, io};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Bid {
@@ -93,10 +92,9 @@ pub fn save_auction_data(
 pub async fn list_auctions() -> AuctionHouse {
     let result = get_files_in_directory("auctions");
     println!(
-        "{:<150} {:<15} {:<10}  {:<10} {:<10}",
+        "|{:<130} | {:<15} | {:<23} | {:<10} | {:<10}|",
         "ID", "Auction Name", "End Time", "bidding price", "Auction State"
     );
-    println!("-------------------------------------------------------------------------------------------------------------------------------");
     match result {
         Ok(n) => {
             let auction_house = build_auctions_from_files(&n).await;
@@ -108,22 +106,13 @@ pub async fn list_auctions() -> AuctionHouse {
                     bidding_price = auction.bids[auction.bids.len() - 1].amount;
                 }
                 println!(
-                    "{:<150} {:<15} {:<10} {:<10} {:<10} ",
+                    "|{:<130} | {:<15} | {:<10} | {:<13} | {:<10}|",
                     auction.signature,
                     auction.item_name,
                     auction.end_time,
                     bidding_price,
                     auction.active
                 );
-
-                // println!(
-                //     "\nID: {} auction_name: {}, end_time:{}, biding_price: {:?}, auction_state:{}",
-                //     auction.signature,
-                //     auction.item_name,
-                //     auction.end_time,
-                //     bidding_price,
-                //     auction.active
-                // )
             }
             auction_house
         }
@@ -134,7 +123,7 @@ pub async fn list_auctions() -> AuctionHouse {
     }
 }
 
-async fn build_auctions_from_files(files: &Vec<std::string::String>) -> AuctionHouse {
+pub async fn build_auctions_from_files(files: &Vec<std::string::String>) -> AuctionHouse {
     let mut major_auction = AuctionHouse::new();
     for file in files {
         let data = fs::read_to_string(format!("auctions/{}", file)).unwrap();

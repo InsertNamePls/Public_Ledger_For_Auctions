@@ -1,32 +1,32 @@
-use auctions_pub_ledger::auction_app;
 use auctions_pub_ledger::auction_app::auction::list_auctions;
 use auctions_pub_ledger::auction_app::auction::Auction;
-use auctions_pub_ledger::auction_app::auction::AuctionHouse;
 use auctions_pub_ledger::auction_app::auction::Bid;
-use auctions_pub_ledger::auction_app::auction::Notification;
 use auctions_pub_ledger::auction_app::auction::Transaction;
+use auctions_pub_ledger::auction_app::auction_operation::client::create_user;
 use auctions_pub_ledger::auction_app::auction_operation::client::get_auction_house;
+use auctions_pub_ledger::auction_app::auction_operation::client::get_user;
 use auctions_pub_ledger::auction_app::auction_operation::client::send_transaction;
 use auctions_pub_ledger::auction_app::notifications::notify_server::notification_server;
-use auctions_pub_ledger::auction_app::user::User;
-use auctions_pub_ledger::cryptography::ecdsa_keys::generate_ecdsa_keypair;
+use auctions_pub_ledger::auction_app::user::UserActivity;
+use auctions_pub_ledger::auction_app::user::{
+    add_credits, load_users_from_file, register_user, User,
+};
 use auctions_pub_ledger::cryptography::ecdsa_keys::load_ecdsa_keys;
-use chrono::Duration;
-use chrono::Utc;
+use chrono::{Duration, Utc};
+use colored::*;
 use k256::ecdsa::SigningKey;
 use k256::ecdsa::{signature::Signer, Signature};
+use local_ip_address::local_ip;
 use sha256::digest;
-use std::collections::HashMap;
 use std::env;
-use std::fs;
 use std::io::{self, Write};
-
 use tokio::task;
 
 #[cfg(not(target_os = "windows"))]
 fn clear_screen() {
     std::process::Command::new("clear").status().unwrap();
 }
+const BOOTSTRAP_NODE_ADDRES: &str = "10.10.0.2";
 
 #[tokio::main]
 async fn main() {
@@ -42,13 +42,14 @@ async fn main() {
         .expect("Failed to read line");
 
     let mut user = match option.trim() {
-        "1" => login(),
-        "2" => register_user().await,
+        "1" => login().await,
+        "2" => register_user(BOOTSTRAP_NODE_ADDRES).await,
         _ => {
             println!("Invalid option, please try again.");
             return;
         }
     };
+    pause();
 
     loop {
         clear_screen();
@@ -78,7 +79,7 @@ async fn main() {
     }
 }
 
-fn login() -> User {
+async fn login() -> User {
     println!("Please enter your Username:");
     let mut username = String::new();
     io::stdin()
@@ -86,63 +87,19 @@ fn login() -> User {
         .expect("Failed to read line");
     let username = username.trim();
 
-    // Load users from "users.json"
-    let users = load_users_from_file("users.json").expect("Failed to load users");
+    let user: User = load_users_from_file(&format!("users/{}.json", &username))
+        .await
+        .expect("Login error please try again...");
 
-    //
-    // Attempt to find the user with the given uid and ssh_key_path
+    println!(
+        "{}",
+        format!("Login successful\nWelcome back {}", user.user_name).green()
+    );
 
-    for user in users {
-        if user.user_name == username {
-            return user;
-        }
-    }
-    clear_screen();
-
-    println!("Login failed. User don't exist!!!");
-    login() // Retry login
+    user
 }
 
-fn load_users_from_file(file_path: &str) -> Result<Vec<User>, serde_json::Error> {
-    let data = match fs::read_to_string(file_path) {
-        Ok(data) => data,
-        Err(_) => {
-            println!("No existing users found or unable to read the file.");
-            return Ok(vec![]);
-        }
-    };
-    serde_json::from_str(&data)
-}
-
-async fn register_user() -> User {
-    println!("Please enter your Username:");
-    let mut username = String::new();
-    io::stdin()
-        .read_line(&mut username)
-        .expect("Failed to read line");
-
-    let (_, public_key) = generate_ecdsa_keypair();
-    let user = User {
-        uid: hex::encode(public_key.to_sec1_bytes()),
-        user_name: username.trim().to_string(),
-        credits: 0.0,
-        participated_auctions: HashMap::new(),
-    };
-
-    // Path to the JSON file where users are stored
-    let file_path = "users.json";
-    let mut users = Vec::new();
-
-    // Add the new user to the vector and write it back to the file
-    users.push(user.clone()); // Clone user for push to avoid move
-    let users_json = serde_json::to_string_pretty(&users).expect("Failed to serialize users");
-    fs::write(file_path, users_json).expect("Failed to write to users.json");
-
-    println!("User registered successfully.");
-    user // Return the original user, not moved thanks to clone
-}
-
-async fn auctions_menu(user: &mut User, dest_ip: Vec<String>) {
+async fn auctions_menu(user: &mut User, peers_list: Vec<String>) {
     let (private_key, _) = load_ecdsa_keys(user.uid.clone());
     loop {
         clear_screen();
@@ -161,10 +118,10 @@ async fn auctions_menu(user: &mut User, dest_ip: Vec<String>) {
             .expect("Failed to read line");
 
         match option.trim() {
-            "1" => join_auction(user, &dest_ip, private_key.clone()).await,
-            "2" => create_auction(&user, &dest_ip, private_key.clone()).await,
-            "3" => current_auctions(&dest_ip).await,
-            "4" => history(user),
+            "1" => join_auction(user, &peers_list, private_key.clone()).await,
+            "2" => create_auction(user, &peers_list, private_key.clone()).await,
+            "3" => current_auctions(&peers_list).await,
+            "4" => history(user).await,
             "5" => break,
             _ => {
                 println!("Invalid option, please try again.");
@@ -190,9 +147,9 @@ async fn profile_menu(user: &mut User) {
             .expect("Failed to read line");
 
         match option.trim() {
-            "1" => view_profile(user),
-            "2" => add_credits(user).await,
-            "3" => history(user),
+            "1" => view_profile(user).await,
+            "2" => add_credits(BOOTSTRAP_NODE_ADDRES, user).await,
+            "3" => history(user).await,
             "4" => break,
             _ => {
                 println!("Invalid option, please try again.");
@@ -201,39 +158,21 @@ async fn profile_menu(user: &mut User) {
     }
 }
 
-fn view_profile(user: &User) {
+async fn view_profile(user: &User) {
+    let user = get_user(BOOTSTRAP_NODE_ADDRES, &user.uid).await.unwrap();
+
     clear_screen();
     println!("User Profile:");
     println!("Uid: {}", user.uid);
     println!("Username: {}", user.user_name);
     println!("Credits: ${}", user.credits);
 
-    // Displaying the user's participated auctions:
-    println!("Participated Auctions:");
-    user.list_participated_auctions();
-
     pause();
-}
-
-async fn add_credits(user: &mut User) {
-    clear_screen();
-    println!("Adding credits to your account.");
-    println!("Enter the amount you want to add (e.g., 100):");
-    let mut amount_str = String::new();
-    io::stdin().read_line(&mut amount_str).unwrap();
-    // Skipping input validation for simplicity
-    let amount: f32 = amount_str.trim().parse().unwrap();
-    user.add_credits(amount);
-
-    println!(
-        "Credits added successfully! Your new balance is ${}",
-        user.credits
-    );
-    pause();
-    // Implementation for adding credits to the user's account
 }
 
 async fn join_auction(user: &mut User, dest_ip: &Vec<String>, private_key: SigningKey) {
+    let mut user = get_user(BOOTSTRAP_NODE_ADDRES, &user.uid).await.unwrap();
+
     clear_screen();
 
     get_auction_house(dest_ip)
@@ -288,10 +227,28 @@ async fn join_auction(user: &mut User, dest_ip: &Vec<String>, private_key: Signi
             signature: hex::encode(signature.clone().to_bytes()),
             auction_signature: auction_signature,
         };
+        let local_ip_address = local_ip().unwrap();
 
-        match send_transaction(Transaction::Bid(bid.clone()), dest_ip[0].clone()).await {
-            Ok(result) => {
-                println!("Transaction generated -> {:?} ", result);
+        match send_transaction(
+            Transaction::Bid(bid.clone()),
+            &dest_ip[0],
+            local_ip_address.to_string(),
+        )
+        .await
+        {
+            Ok(_result) => {
+                println!(
+                    "Transaction successfully created for auction:  {:?} ",
+                    bid.clone().signature
+                );
+                let activity: UserActivity = UserActivity {
+                    activity_type: "Bid".to_string(),
+                    auction_signature: bid.auction_signature,
+                    amount: bid.amount,
+                };
+                user.activity.push(activity);
+                let user_str = serde_json::to_string(&user).unwrap();
+                let _ = create_user(BOOTSTRAP_NODE_ADDRES, &user_str).await;
             }
             Err(e) => {
                 println!("error {}", e);
@@ -303,7 +260,9 @@ async fn join_auction(user: &mut User, dest_ip: &Vec<String>, private_key: Signi
     pause();
 }
 
-async fn create_auction(user: &User, dest_ip: &Vec<String>, private_key: SigningKey) {
+async fn create_auction(user: &mut User, dest_ip: &Vec<String>, private_key: SigningKey) {
+    let mut user = get_user(BOOTSTRAP_NODE_ADDRES, &user.uid).await.unwrap();
+
     clear_screen();
     println!("Creating a new auction.");
     println!("Enter the item name:");
@@ -338,7 +297,7 @@ async fn create_auction(user: &User, dest_ip: &Vec<String>, private_key: Signing
         .await
         .expect("error geting acution from peers");
 
-    let auction_house = list_auctions().await;
+    list_auctions().await;
 
     let signed_content =
         digest(item_name.trim().to_string() + &starting_bid.to_string() + &user.uid.clone());
@@ -356,10 +315,30 @@ async fn create_auction(user: &User, dest_ip: &Vec<String>, private_key: Signing
         vec![],
     );
 
-    send_transaction(Transaction::Auction(auction.clone()), dest_ip[0].clone())
-        .await
-        .expect("ERROR sending transaction");
-    println!("Auction created successfully!");
+    let local_ip_address = local_ip().unwrap();
+    match send_transaction(
+        Transaction::Auction(auction.clone()),
+        &dest_ip[0],
+        local_ip_address.to_string(),
+    )
+    .await
+    {
+        Ok(_result) => {
+            println!("Auction created successfully:  {:?}", auction.signature);
+            let activity: UserActivity = UserActivity {
+                activity_type: "AuctionCreation".to_string(),
+                auction_signature: auction.signature,
+                amount: auction.starting_bid,
+            };
+            user.activity.push(activity);
+            let user_str = serde_json::to_string(&user).unwrap();
+            let _ = create_user(BOOTSTRAP_NODE_ADDRES, &user_str).await;
+        }
+        Err(e) => {
+            println!("error {}", e);
+        }
+    }
+
     pause();
 }
 
@@ -376,10 +355,24 @@ async fn current_auctions(dest_ip: &Vec<String>) {
     pause();
 }
 
-fn history(user: &User) {
+async fn history(user: &User) {
+    let user: User = get_user(BOOTSTRAP_NODE_ADDRES, &user.uid).await.unwrap();
+
     clear_screen();
-    println!("Participated Auctions:");
-    user.list_participated_auctions();
+    println!("Auction Activity:");
+    println!(
+        "|{:<130} | {:<15} | {:<13} | {:<10}|",
+        "ID", "Activity type", "bidding price", "Auction Winner"
+    );
+    for activity in user.activity.iter() {
+        let winner_checker = user.auctions_winner.contains(&activity.auction_signature);
+
+        println!(
+            "|{:<130} | {:<15} | {:<13} | {:<10}|",
+            activity.auction_signature, activity.activity_type, activity.amount, winner_checker
+        );
+    }
+    //user.list_participated_auctions();
 
     pause();
 }

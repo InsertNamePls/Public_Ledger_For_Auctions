@@ -3,7 +3,6 @@ version: "3.8"
 services:
   server1:
     build: ./auctions_pub_ledger
-    #image: dledger2auction
     environment:
       HOME: /home
       NGH_ADDR: 10.10.0.3
@@ -12,11 +11,9 @@ services:
       vpcbr:
         ipv4_address: 10.10.0.2
     tty: true
-    #command: ["cargo build"]
 
   server2:
     build: ./auctions_pub_ledger
-    #image: dledger2auction
     environment:
       HOME: /home
       NGH_ADDR: 10.10.0.2
@@ -27,13 +24,9 @@ services:
     depends_on:
       - server1
     tty: true
-  #   #entrypoint:
-  # #  [
-  # #       "cd /home/ && cargo build && cargo run --bin main -- join_blockchain 10.10.0.2",
-  # #      ]
+
   auction1:
     build: ./auctions_pub_ledger
-    #image: dledger2auction
     environment:
       HOME: /home
       NGH_ADDR: 10.10.0.2
@@ -44,7 +37,6 @@ services:
     tty: true
   auction2:
     build: ./auctions_pub_ledger
-    #image: dledger2auction
     environment:
       HOME: /home
       NGH_ADDR: 10.10.0.3
@@ -53,9 +45,6 @@ services:
       vpcbr:
         ipv4_address: 10.10.0.5
     tty: true
-  #   #entrypoint:
-  #   #  ["cd /home/ && cargo build && cargo run --bin auction -- 10.10.0.3"]
-  #
 networks:
   vpcbr:
     driver: bridge

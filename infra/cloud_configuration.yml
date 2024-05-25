@@ -1,0 +1,40 @@
+project_name: fcupProjects2324
+region: europe-west4
+public_cidr: 192.168.0.0/24
+zones:
+  - europe-west4-a
+  - europe-west4-b
+  - europe-west4-c
+project_id: fcupprojects2324
+bucket_name: auctions_pub_ledger_tfstate
+service_account_file: ~/fcupprojects2324-0be80faf5de6.json
+path_local_public_key: ../../ssh_keys/idrsa.pub
+username: "auctions_user"
+image: debian-cloud/debian-11
+scopes: ["cloud-platform"]
+allow_ip_list:
+  - "149.90.112.98/32"
+hosts:
+  {
+    auctions_server:
+      {
+        n_nodes: 1,
+        machine_type: e2-small,
+        provisioning_model: SPOT,
+        tags: ["ssh", "auctions-server"],
+      },
+    bootstrap_node:
+      {
+        n_nodes: 1,
+        machine_type: e2-small,
+        provisioning_model: SPOT,
+        tags: ["ssh", "bootstrap-node"],
+      },
+    auctions_client:
+      {
+        n_nodes: 1,
+        machine_type: e2-small,
+        provisioning_model: SPOT,
+        tags: ["ssh", "auction-client"],
+      },
+  }

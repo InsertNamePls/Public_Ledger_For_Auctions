@@ -1,0 +1,13 @@
+
+plugin: gcp_compute
+projects:
+  - fcupprojects2324
+region: europe-west4
+hostnames:
+  - public_ip
+groups:
+  auctions_server: "'auctions_server' in name"
+  bootstrap_node: "'bootstrap_node' in name"
+  auction_client: "'auction_client' in name"
+auth_kind: serviceaccount
+service_account_file: ~/fcupprojects2324-0be80faf5de6.json

@@ -14,8 +14,8 @@ use tokio::sync::Mutex;
 use tonic::transport::{Certificate, Channel, ClientTlsConfig};
 use tonic::{Request, Response, Status};
 
+use colored::*;
 use sha256::digest;
-const DIFICULTY: usize = 2;
 #[derive(Default, Debug, Clone)]
 pub struct BlockchainServer {
     pub shared_blockchain_state: Arc<Mutex<Vec<Blockchain>>>,
@@ -41,7 +41,15 @@ impl BlockchainGrpc for BlockchainServer {
     ) -> BlockchainGrpcResult<ProofOfWorkResponse> {
         let block: Block = serde_json::from_str(&request.into_inner().block).unwrap();
 
-        println!("incoming block from peer: {:?}", block.clone());
+        println!(
+        "{}",
+        format!(
+            "Incoming block from peer\n index:{:?}\n hash:{:?} prev_hash:{:?}\n nounce:{:?}\n transactions{:?}\n",
+            block.index, block.hash, block.prev_hash, block.nounce, block.tx
+        )
+        .green()
+    );
+
         let validation =
             block_handler(&mut self.shared_blockchain_state.clone(), block.clone()).await;
 
@@ -75,12 +83,8 @@ impl BlockchainGrpc for BlockchainServer {
                     break;
                 }
             }
-            println!(
-                "puzzle solved for code {}: {}",
-                puzzle.code, nounce_solution
-            );
+            println!("puzzle solved nounce:{}\n", nounce_solution);
         }
-        println!("Proof of Stake puzzle solution: {:?}", puzzle_solution);
         let result = serde_json::to_string(&puzzle_solution).unwrap();
         Ok(Response::new(ProofOfStakePuzzleResponse { result }))
     }
@@ -93,7 +97,7 @@ pub async fn blockchain_client(
     let ca = std::fs::read_to_string("tls/rootCA.crt")?;
     let tls = ClientTlsConfig::new()
         .ca_certificate(Certificate::from_pem(ca))
-        .domain_name("auctiondht.com");
+        .domain_name("auctiondht.fc.up.pt");
     let channel = Channel::builder(format!("https://{}:3001", peer).parse().unwrap())
         .tls_config(tls)
         .unwrap()
@@ -110,7 +114,7 @@ pub async fn blockchain_client_async(
     let ca = std::fs::read_to_string("tls/rootCA.crt")?;
     let tls = ClientTlsConfig::new()
         .ca_certificate(Certificate::from_pem(ca))
-        .domain_name("auctiondht.com");
+        .domain_name("auctiondht.fc.up.pt");
     let channel = Channel::builder(format!("https://{}:3001", peer).parse().unwrap())
         .tls_config(tls)
         .unwrap()

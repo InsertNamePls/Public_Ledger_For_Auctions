@@ -1,0 +1,33 @@
+- name: copy project compressed
+  tags: config
+  copy:
+    src: "../../../auctions_pub_ledger.tar.gz"
+    dest: "/home/{{username}}/"
+    mode: 0700
+    owner: "{{username}}"
+    group: "{{username}}"
+- name: uncompress project
+  tags: config
+  shell: |
+    tar -xzf /home/{{username}}/auctions_pub_ledger.tar.gz
+    chown -R {{username}}:{{username}} /home/{{username}}/auctions_pub_ledger
+    chown -R {{username}}:{{username}} /home/{{username}}/auctions_pub_ledger/*
+
+- name: copy certificates cert
+  tags: config
+  copy:
+    src: "../../certificates/server.crt"
+    dest: "/home/{{username}}/auctions_pub_ledger/tls/"
+    mode: 0700
+    owner: "{{username}}"
+    group: "{{username}}"
+    
+- name: copy certificates key
+  tags: config
+  copy:
+    src: "../../certificates/server.key"
+    dest: "/home/{{username}}/auctions_pub_ledger/tls/"
+    mode: 0700
+    owner: "{{username}}"
+    group: "{{username}}"
+        
