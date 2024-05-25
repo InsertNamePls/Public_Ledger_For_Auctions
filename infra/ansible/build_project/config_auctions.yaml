@@ -1,0 +1,48 @@
+- hosts: all
+  remote_user: auctions_user
+  become: true
+  vars_files:
+    - ../../cloud_configuration.yml
+  tasks:
+    - name: init project and install dependencies
+      tags: init
+      import_tasks: ../auctions_config/init.yaml
+
+- hosts: all
+  remote_user: auctions_user
+  become: true
+  vars_files:
+    - ../../cloud_configuration.yml
+  tasks:  
+    - name: import project to instances
+      tags: config
+      import_tasks: ../auctions_config/config.yaml
+
+- hosts: all
+  remote_user: auctions_user
+  become: true
+  vars_files:
+    - ../../cloud_configuration.yml
+  tasks:  
+    - name: build project
+      tags: build
+      import_tasks: ../auctions_config/build.yaml        
+# - hosts: iptvserver
+#   remote_user: iptvserver
+#   become: true
+#   vars_files:
+#     - ../../cloud_configuration.yml
+#   tasks:
+#     - name: configure nginx server
+#       tags: nginx
+#       import_tasks: ../nginx/config.yaml
+#
+# - hosts: iptvserver
+#   remote_user: iptvserver
+#   become: true
+#   vars_files:
+#     - ../../iptv_cloud_configuration.yml
+#   tasks:
+#     - name: configure monitoring
+#       tags: monitoring
+#       import_tasks: ../nginx/monitoring.yaml

@@ -1,0 +1,11 @@
+---
+- hosts: 127.0.0.1
+  connection: local
+  vars_files:
+    - ../../cloud_configuration.yml
+  tasks:
+    - name: create bastion ssh-keys
+      shell: |
+        rm -fr ../../ssh_keys
+        mkdir ../../ssh_keys
+        ssh-keygen -t rsa -b 4096 -f ../../ssh_keys/idrsa -C "{{username}}" -q -N ""

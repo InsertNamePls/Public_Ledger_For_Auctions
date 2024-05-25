@@ -1,11 +1,11 @@
 use chrono::Utc;
+use colored::*;
 use serde::{Deserialize, Serialize};
 use sha256::digest;
 use std::sync::Arc;
 use std::usize;
 use std::vec::Vec;
 use tokio::sync::Mutex;
-
 const DIFICULTY: usize = 4;
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Block {
@@ -111,7 +111,7 @@ pub fn validate_block(new_block: &Block, previous_block: &Block, dificulty: usiz
 
         false
     } else {
-        println!("Block {} valid ", new_block.index);
+        println!("{}", format!("Block {} valid\n", new_block.index).green());
         true
     }
 }
@@ -141,7 +141,21 @@ pub async fn block_generator(
     let main_blockchain = blockchain_vector.clone().get(0).unwrap().clone();
 
     let previous_block = main_blockchain.clone().blocks.last().unwrap().clone();
-    println!("previous{:?}", previous_block);
+    println!("---------------------- Block Generator ----------------------\n");
+    println!(
+        "{}",
+        format!(
+            "Prevous Block\n index:{:?}\n hash:{:?} prev_hash:{:?}\n nounce:{:?}\n transactions{:?}\n",
+            previous_block.index,
+            previous_block.hash,
+            previous_block.prev_hash,
+            previous_block.nounce,
+            previous_block.tx
+        )
+        .blue()
+    );
+    println!("-------------------------------------------------------------\n");
+
     let mut block: Block = Block::new(
         previous_block.index + 1,
         previous_block.hash.clone(),
@@ -152,8 +166,16 @@ pub async fn block_generator(
     );
 
     block.mine_block(4);
+    println!(
+        "{}",
+        format!(
+            "Generated Block\n index:{:?}\n hash:{:?} prev_hash:{:?}\n nounce:{:?}\n transactions{:?}\n",
+            block.index, block.hash, block.prev_hash, block.nounce, block.tx
+        )
+        .green()
+    );
+    println!("-------------------------------------------------------------\n");
 
-    println!("Generated Block: {:?}\n", block);
     block
 }
 
@@ -162,7 +184,7 @@ pub async fn validator(blockchain: Blockchain, block: Block) -> bool {
     if validate_block(&block, blockchain.blocks.last().unwrap(), DIFICULTY) {
         true
     } else {
-        println!("block {} is invalid ", block.index);
+        println!("{}", format!("block {} is invalid ", block.index).red());
         false
     }
 }

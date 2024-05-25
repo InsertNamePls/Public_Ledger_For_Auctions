@@ -1,4 +1,4 @@
-use crate::auction_server::blockchain::{self, validate_block, Block, Blockchain};
+use crate::auction_server::blockchain::{Block, Blockchain};
 use crate::auction_server::blockchain_operation::client::blockchain_client;
 use crate::auction_server::blockchain_operation::client::blockchain_client_async;
 use crate::blockchain_grpc::ProofOfWorkRequest;
@@ -27,7 +27,6 @@ pub async fn block_peer_validator_client(
 ) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
     let mut client = blockchain_client_async(peer).await?;
 
-    //let mut client = BlockchainGrpcClient::connect(format!("http://{}:3001", peer)).await?;
     let block = serde_json::to_string(&block_to_validate).unwrap();
     let request = tonic::Request::new(ProofOfWorkRequest { block });
     let response = client.proof_of_work(request).await?;

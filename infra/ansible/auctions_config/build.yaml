@@ -1,0 +1,18 @@
+- name: build project
+  tags: build
+  shell: |
+    export RUSTUP_HOME=/opt/rust
+    export PATH=$PATH:/opt/rust/bin
+    export RUSTUP_HOME=/opt/rust
+    export PATH=$PATH:/opt/rust/bin
+    cd /home/{{username}}/auctions_pub_ledger
+    cargo build --release
+    chown -R {{username}}:{{username}} /home/{{username}}/auctions_pub_ledger
+    chown -R {{username}}:{{username}} /home/{{username}}/auctions_pub_ledger/*
+    
+- name: copy executable to /usr/local/bin folder
+  tags: build
+  shell: |
+    ln -s /home/{{username}}/auctions_pub_ledger/target/release/auction_app /home/{{username}}/auctions_pub_ledger/auction_app
+    ln -s /home/{{username}}/auctions_pub_ledger/target/release/auctions_server /home/{{username}}/auctions_pub_ledger/auctions_server
+        

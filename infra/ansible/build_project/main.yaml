@@ -1,0 +1,95 @@
+---
+- hosts: 127.0.0.1
+  connection: local
+  vars_files:
+    - ../../cloud_configuration.yml
+  tasks:
+    - name: Remove block of text
+      tags: destroy
+      ansible.builtin.blockinfile:
+        path: /etc/ssh/ssh_config
+        state: absent
+        marker: "# {mark} ssh config"
+
+    - name: Insert a block at the beginning of a file
+      ansible.builtin.blockinfile:
+        path: /etc/ssh/ssh_config
+        insertafter: BOF
+        block: |
+          Host 35.*
+            Port 22
+            User {{username}}
+            StrictHostKeyChecking no
+            UserKnownHostsFile=/dev/null
+            KexAlgorithms curve25519-sha256,ecdh-sha2-nistp521
+        marker: "# {mark} ssh config "
+    - name: create inventory file
+      tags: init
+      shell: |
+        echo "" > ../inventory/inventory.gcp.yml
+        tee -a ../inventory/inventory.gcp.yml << EOF
+        plugin: gcp_compute
+        projects:
+          - {{project_id}}
+        region: {{region}}
+        hostnames:
+          - public_ip
+        groups:
+          auctions_server: "'auctions_server' in name"
+          bootstrap_node: "'bootstrap_node' in name"
+          auction_client: "'auction_client' in name"
+        auth_kind: serviceaccount
+        service_account_file: {{ service_account_file }}
+        EOF
+
+    - name: check if local pub ip is inside of ip's list
+      register: pub_ip
+      command: curl ifconfig.me
+
+    - name: append local pub ip into allow list
+      when: item not in allow_ip_list
+      set_fact:
+        allow_ip_list: "{{ allow_ip_list + [ item ] }}"
+      with_items: "{{ pub_ip.stdout }}/32"
+
+    - name: write vars into tfvars file
+      shell: |
+        echo "" > ../../terraform/env.tfvars
+        tee -a ../../terraform/env.tfvars << EOF
+        tfstate_bucket_name="{{ bucket_name }}"
+        service_account_file="{{service_account_file}}"
+        project_name="{{ project_name }}"
+        project_id="{{ project_id }}"
+        region="{{ region }}"
+        ip_isp_pub={{ allow_ip_list | replace("'",'"') }}
+        path_local_public_key="{{ path_local_public_key }}"
+        username="{{username}}"
+        image="{{image}}"
+        scopes={{scopes | replace("'",'"') }}
+
+        auctions_server_n_nodes="{{hosts.auctions_server.n_nodes}}"
+        auctions_server_machine_type="{{hosts.auctions_server.machine_type}}"
+        auctions_server_provisioning_model="{{hosts.auctions_server.provisioning_model}}"
+        auctions_server_tags={{hosts.auctions_server.tags| replace("'",'"') }}
+
+        bootstrap_node_n_nodes="{{hosts.bootstrap_node.n_nodes}}"
+        bootstrap_node_machine_type="{{hosts.bootstrap_node.machine_type}}"
+        bootstrap_node_provisioning_model="{{hosts.bootstrap_node.provisioning_model}}"
+        bootstrap_node_tags={{hosts.bootstrap_node.tags| replace("'",'"') }}
+
+        auction_client_n_nodes="{{hosts.auctions_client.n_nodes}}"
+        auction_client_machine_type="{{hosts.auctions_client.machine_type}}"
+        auction_client_provisioning_model="{{hosts.auctions_client.provisioning_model}}"
+        auction_client_tags={{hosts.auctions_client.tags| replace("'",'"') }}
+
+        EOF
+    - name: compress project
+      shell: |
+        cd ../../../
+        tar -czf auctions_pub_ledger.tar.gz auctions_pub_ledger
+        
+    - name: tf_state_bucket
+      shell: |
+        cd ../../terraform/tf_state_bucket/ 
+        terraform init
+        terraform {{command}} -var="region={{region}}" -var="project_id={{project_id}}" -var="service_account_file={{service_account_file}}" -var="tfstate_bucket_name={{bucket_name}}" -auto-approve

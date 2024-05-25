@@ -27,7 +27,7 @@ pub async fn run_client_async(
     let ca = std::fs::read_to_string("tls/rootCA.crt")?;
     let tls = ClientTlsConfig::new()
         .ca_certificate(Certificate::from_pem(ca))
-        .domain_name("auctiondht.com");
+        .domain_name("auctiondht.fc.up.pt");
     let channel = Channel::builder(format!("https://{}:3002", dest_addr).parse().unwrap())
         .tls_config(tls)
         .unwrap()

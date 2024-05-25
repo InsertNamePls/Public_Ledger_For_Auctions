@@ -154,9 +154,7 @@ docker build ./auctions_pub_ledger --tag dledger2auction
 
 2. Create Docker instance
 ```bash 
-docker compose up -d              
-
-
+docker compose up -d
 ```
 3. Access containers in individual bash window 
 ```bash
@@ -166,21 +164,19 @@ docker exec -it public_ledger_for_auctions-auction1-1  bash
 ```
 4. Execute init blockchain connand to start the server (public_ledger_for_auctions-server1-1) 
 ```bash
-cargo run --bin main -- init_blockchain 10.10.0.3
-cargo run --bin main -- init_blockchain pos
+    cargo run --bin auctions_server -- init_blockchain pos
 ```
 5. Execute join command on the remaining servers (public_ledger_for_auctions-server2-1) 
 ```bash
-cargo run --bin main -- join_blockchain 10.10.0.2
-cargo run --bin main -- join_blockchain pos 10.10.0.2:50051
-cargo run --bin main -- join_blockchain pow 10.10.0.2:50051
+cargo run --bin auctions_server -- join_blockchain pos 10.10.0.2:50051
+cargo run --bin auctions_server -- join_blockchain pow 10.10.0.2:50051
 
 
 ```
 6. Run auction nodes
 ```bash
-cargo run --bin auction -- 10.10.0.3,10.10.0.2
-cargo run --bin auction -- 10.10.0.2,10.10.0.3
+cargo run --bin auction_app -- 10.10.0.3,10.10.0.2
+cargo run --bin auction_app -- 10.10.0.2,10.10.0.3
 
 
 ```

@@ -6,17 +6,16 @@ use auctions_pub_ledger::auction_server::blockchain::Blockchain;
 use auctions_pub_ledger::auction_server::blockchain_operation::server::blockchain_server;
 use auctions_pub_ledger::auction_server::blockchain_operator::get_remote_blockchain;
 use auctions_pub_ledger::auction_server::blockchain_operator::save_blockchain_locally;
-use clap::{Arg, Command};
-use tokio::task;
-
 use auctions_pub_ledger::kademlia_node_search::node::run_server;
 use auctions_pub_ledger::kademlia_node_search::node::Node;
-use std::env;
+use clap::{Arg, Command};
+use local_ip_address::local_ip;
 use std::fs;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::vec::Vec;
 use tokio::sync::Mutex;
+use tokio::task;
 
 async fn destributed_auction_operator(
     blockchain_vector: Vec<Blockchain>,
@@ -48,13 +47,12 @@ async fn destributed_auction_operator(
         mining_type.cloned(),
     ));
     let task3 = task::spawn(blockchain_server(shared_blockchain_vector.clone()));
-    let addr_str = addr.clone().to_string();
     let task4 = task::spawn(run_server(addr.clone(), kademlia_node.clone()));
     //let task5 = task::spawn(loop_func(kademlia_node.clone()));
     task1.await.unwrap();
     task2.await.unwrap();
     task3.await.unwrap();
-    task4.await.unwrap();
+    let _ = task4.await.unwrap();
 }
 
 #[tokio::main]
@@ -111,9 +109,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             blockchain_vector.push(bchain.clone());
             let bootstrap_addr = server_matches.get_one::<String>("bootstrap");
             let mining_type = server_matches.get_one::<String>("mining_type");
-            let addr = env::var("KADEMLIA_LOCAL_NODE").expect("MY_ENV_VAR is not set");
-
-            let addr = addr.parse::<SocketAddr>().unwrap();
+            let local_ip_address = local_ip().unwrap().to_string();
+            let kademlia_ip = format!("{}:50051", local_ip_address);
+            let addr = kademlia_ip.parse::<SocketAddr>().unwrap();
 
             save_blockchain_locally(&bchain, "blockchain_active/blockchain_0.json").await;
             destributed_auction_operator(blockchain_vector, bootstrap_addr, addr, mining_type)
@@ -122,9 +120,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some(("join_blockchain", server_matches)) => {
             let bootstrap_addr = server_matches.get_one::<String>("bootstrap");
             let mining_type = server_matches.get_one::<String>("mining_type");
-            let addr = env::var("KADEMLIA_LOCAL_NODE").expect("MY_ENV_VAR is not set");
+            let local_ip_address = local_ip().unwrap().to_string();
+            let kademlia_ip = format!("{}:50051", local_ip_address);
+            let addr = kademlia_ip.parse::<SocketAddr>().unwrap();
 
-            let addr = addr.parse::<SocketAddr>().unwrap();
             match get_remote_blockchain(
                 bootstrap_addr
                     .cloned()

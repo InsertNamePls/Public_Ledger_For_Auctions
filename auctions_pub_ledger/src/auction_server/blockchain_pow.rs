@@ -3,7 +3,6 @@ use crate::auction_server::blockchain::{Block, Blockchain};
 use crate::auction_server::blockchain_operator::save_blockchain_locally;
 use chrono::Utc;
 use std::sync::Arc;
-
 use tokio::sync::Mutex;
 
 pub async fn block_handler(

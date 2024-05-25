@@ -6,9 +6,19 @@ service Auction_Tx {
   rpc SubmitTransaction(SubmitTransactionRequest)
       returns (SubmitTransactionResponse) {}
   rpc GetAuctions(GetAuctionsRequest) returns (GetAuctionsResponse) {}
+  rpc CreateUsers(CreateUsersRequest) returns (CreateUsersResponse) {}
+  rpc UpdateUsers(UpdateUsersRequest) returns (UpdateUsersResponse) {}
+  rpc GetUsers(GetUsersRequest) returns (GetUsersResponse) {}
 }
 
 message SubmitTransactionRequest { string transaction = 1; }
 message SubmitTransactionResponse { string message = 1; }
 message GetAuctionsRequest {}
 message GetAuctionsResponse { string auctions = 1; }
+
+message CreateUsersRequest { string user = 1; }
+message CreateUsersResponse { string response = 1; }
+message UpdateUsersRequest { string bid_str = 1; }
+message UpdateUsersResponse { string response = 1; }
+message GetUsersRequest { string id = 1; }
+message GetUsersResponse { string user = 1; }

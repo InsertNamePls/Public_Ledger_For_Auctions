@@ -1,22 +1,19 @@
 use crate::auction_app::auction::{AuctionHouse, Bid, Transaction};
 use crate::auction_app::auction_operation::client::send_transaction;
 use crate::auction_app::notifications::notify_client::send_notification;
-use crate::kademlia_node_search::node_functions::routing_table;
 use chrono::Utc;
 use elliptic_curve::generic_array::GenericArray;
 use k256::ecdsa::Signature;
 use k256::ecdsa::{signature::Verifier, VerifyingKey};
 use sha256::digest;
-use std::env;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 pub async fn transaction_handler(
-    tx: String,
+    transaction: Transaction,
     shared_auction_house: &mut Arc<Mutex<AuctionHouse>>,
     requester_addr: String,
     routing_table: Vec<String>,
 ) {
-    let transaction: Transaction = serde_json::from_str(&tx).unwrap();
     match transaction {
         Transaction::Bid(ref value) => {
             println!("\n{:?}", value);
@@ -40,10 +37,10 @@ pub async fn transaction_handler(
             match validate_tx_integrity(&signed_content, &value.user_id, value.signature.clone())
                 .await
             {
-                Ok(_True) => {
+                Ok(true) => {
                     auction_house.add_auction(value);
                 }
-                Ok(_False) => println!("signature is not valid"),
+                Ok(false) => println!("signature is not valid"),
                 Err(e) => println!("{:?}", e),
             }
         }
@@ -90,7 +87,7 @@ pub async fn find_auction_to_bid(
 
         if &auction.clone().end_time > &Utc::now() && last_highest_bid < bid.amount {
             match validate_tx_integrity(&signed_content, &bid.bidder, bid.signature.clone()).await {
-                Ok(_true) => {
+                Ok(true) => {
                     let target_auction_position = auction_house
                         .auctions
                         .iter()
@@ -126,7 +123,7 @@ pub async fn find_auction_to_bid(
                     }
                 }
 
-                Ok(_false) => println!("Error integrity signature is not valid"),
+                Ok(false) => println!("Error integrity signature is not valid"),
                 Err(e) => println!("{:?}", e),
             }
         }
@@ -143,7 +140,7 @@ pub async fn find_auction_to_bid(
             .unwrap()
             .to_owned();
 
-        match send_transaction(transaction, dest_ip.clone()).await {
+        match send_transaction(transaction, &dest_ip, requester_addr).await {
             Ok(result) => {
                 println!(
                     "Dispaching Transaction to peer:{:?} {:?} ",

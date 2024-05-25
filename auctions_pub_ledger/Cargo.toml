@@ -39,8 +39,8 @@ rsa = "0.9.6"
 tonic-build = "0.11.0"
 
 [[bin]]
-name = "main"
+name = "auctions_server"
 path = "src/main.rs"
 [[bin]]
-name = "auction"
+name = "auction_app"
 path = "src/auction_app/main.rs"
