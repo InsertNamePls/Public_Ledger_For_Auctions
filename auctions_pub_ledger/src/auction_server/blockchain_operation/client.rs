@@ -50,9 +50,9 @@ impl BlockchainGrpc for BlockchainServer {
         .green()
     );
 
-        let validation =
-            block_handler(&mut self.shared_blockchain_state.clone(), block.clone()).await;
-
+        let nounce_validation =
+            block_handler(&mut self.shared_blockchain_state.clone(), block).await;
+        let validation = nounce_validation.to_string();
         Ok(Response::new(ProofOfWorkResponse { validation }))
     }
     async fn proof_of_stake_puzzle(

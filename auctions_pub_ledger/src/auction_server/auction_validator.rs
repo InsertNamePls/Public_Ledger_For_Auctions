@@ -56,13 +56,21 @@ pub async fn auctions_validator(
                 );
                 byte_count += &auction.signature.as_bytes().len();
                 if byte_count >= 5 {
+                    let mut result_validation = false;
                     let new_block = block_generator(shared_blockchain_vector.clone(), tx).await;
+
+                    let mut new_block_to_validate = new_block.clone();
+                    new_block_to_validate.hash = "".to_string();
+                    new_block_to_validate.nounce = 0;
 
                     let mut list_peer_validation: Vec<bool> = Vec::new();
 
-                    let result_validation =
+                    let validation_nounce =
                         block_handler(&mut shared_blockchain_vector.clone(), new_block.clone())
                             .await;
+                    if validation_nounce == new_block.nounce {
+                        result_validation = true;
+                    }
 
                     match validation_type.as_ref() {
                         Some(s) if s == "pos" => {
@@ -98,21 +106,24 @@ pub async fn auctions_validator(
                                     format!("Node Puzzle Winner: {}\n", peer_puzzle_winner).green()
                                 );
                                 // send block to the first node that retrieves the puzzle corretly
-                                let result_peer_validation = block_peer_validator_client(
-                                    new_block.clone(),
+                                let block_validated_nounce = block_peer_validator_client(
+                                    new_block_to_validate,
                                     peer_puzzle_winner.clone(),
                                 )
                                 .await
                                 .expect("error getting validation from peer");
-                                println!(
-                                    "{}",
-                                    format!(
-                                        "Peer validation {}: {}\n",
-                                        &peer_puzzle_winner, result_peer_validation
-                                    )
-                                    .green()
-                                );
-                                list_peer_validation.push(result_peer_validation);
+
+                                if block_validated_nounce == new_block.clone().nounce {
+                                    list_peer_validation.push(true);
+                                    println!(
+                                        "{}",
+                                        format!(
+                                            "Peer validation {}: {}\n",
+                                            &peer_puzzle_winner, true
+                                        )
+                                        .green()
+                                    );
+                                }
                             }
                         }
                         Some(s) if s == "pow" => {
@@ -122,7 +133,7 @@ pub async fn auctions_validator(
                                 // send puzzle to peers
                                 let handle_puzzle_result =
                                     tokio::task::spawn(block_peer_validator_client(
-                                        new_block.clone(),
+                                        new_block_to_validate.clone(),
                                         peer.clone().split(':').next().unwrap().to_owned(),
                                     ));
                                 handle_peer_validation_results.push(handle_puzzle_result);
@@ -130,8 +141,10 @@ pub async fn auctions_validator(
 
                             for handle_peer_validation_result in handle_peer_validation_results {
                                 match handle_peer_validation_result.await {
-                                    Ok(Ok(result_peer_validation)) => {
-                                        list_peer_validation.push(result_peer_validation);
+                                    Ok(Ok(block_validated_nounce)) => {
+                                        if block_validated_nounce == new_block.clone().nounce {
+                                            list_peer_validation.push(true);
+                                        }
                                     }
 
                                     Ok(Err(e)) => eprintln!("Peer validation result error: {}", e),
