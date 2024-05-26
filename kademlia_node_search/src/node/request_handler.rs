@@ -195,44 +195,115 @@ impl RequestHandler {
         let nonce = find_value_request.nonce;
         let requester_id = Bytes::from(find_value_request.requester_node_id.clone());
         let timestamp = find_value_request.timestamp;
-
+    
         // Message is always the concatenation of the node's timestamp and the public key and id
-        let message = format!("{}{:?}{:?}",find_value_request.timestamp, find_value_request.sender_public_key, find_value_request.requester_node_id).into_bytes();
-
+        let message = format!("{}{:?}{:?}", find_value_request.timestamp, find_value_request.sender_public_key, find_value_request.requester_node_id).into_bytes();
+    
         // Ensure the request is valid
         if !node.lock().await.crypto.validate_request(timestamp, nonce, &requester_id, &message, &find_value_request.signature, &find_value_request.sender_public_key) {
-            let node = node.lock().await;
+            let mut node = node.lock().await;
             node.routing_table.lock().await.adjust_reputation(&requester_id, -1);
             return Err(Status::unauthenticated("Invalid request"));
         }
-
-        let node = node.lock().await;
-        node.routing_table.lock().await.adjust_reputation(&requester_id, 1);
+    
+        let mut node_lock = node.lock().await;
+        node_lock.routing_table.lock().await.adjust_reputation(&requester_id, 1);
         println!("{}", format!("Key requested: {:?}", key).yellow());
-
-        let storage = node.storage.lock().await;
-        if let Some(value) = storage.get(&key) {
+    
+        // Check local storage for the key
+        {
+            let storage = node_lock.storage.lock().await;
+            if let Some(value) = storage.get(&key) {
+                return Ok(Response::new(FindValueResponse {
+                    value: value.clone().to_vec(),
+                    nodes: vec![],
+                }));
+            }
+        }
+    
+        println!("Value not found locally. Performing iterative lookup.");
+    
+        // Get the closest nodes to the key
+        let mut closest_nodes = {
+            let routing_table = node_lock.routing_table.lock().await;
+            routing_table.find_closest(&key)
+        };
+    
+        if closest_nodes.is_empty() {
+            println!("No closest nodes found in local routing table. Returning empty response.");
             return Ok(Response::new(FindValueResponse {
-                value: value.clone().to_vec(),
+                value: Vec::new(),
                 nodes: vec![],
             }));
         }
-
-        let routing_table = node.routing_table.lock().await;
-        let closest_nodes = routing_table.find_closest(&key);
-
-        let proto_nodes = closest_nodes.iter().map(|node_info| {
-            ProtoNodeInfo {
-                id: node_info.id.clone().to_vec(),
-                address: node_info.addr.to_string(),
+    
+        let mut queried_nodes = vec![requester_id.clone()];
+        let mut all_discovered_nodes = closest_nodes.clone();
+        let mut new_nodes_found = true;
+    
+        // Drop the lock to allow other operations while performing iterative lookups
+        drop(node_lock);
+    
+        while new_nodes_found {
+            new_nodes_found = false;
+            for node_info in closest_nodes.iter() {
+                if queried_nodes.contains(&node_info.id) {
+                    continue;
+                }
+    
+                queried_nodes.push(node_info.id.clone());
+    
+                // Send FindValue request to each of the closest nodes
+                let client_addr = node_info.addr.to_string();
+                let find_value_request = {
+                    let node_lock = node.lock().await;
+                    node_lock.client.create_find_value_request(
+                        &node_lock.keypair,
+                        node_lock.id.to_vec(),
+                        key.to_vec(),
+                    )
+                };
+    
+                match node.lock().await.client.send_find_value_request(find_value_request, client_addr.clone()).await {
+                    Ok(response) => {
+                        if !response.value.is_empty() {
+                            return Ok(Response::new(FindValueResponse {
+                                value: response.value,
+                                nodes: vec![],
+                            }));
+                        }
+    
+                        let nodes_from_response = RoutingTable::from_proto_nodes(response.nodes);
+                        for new_node in nodes_from_response {
+                            if !all_discovered_nodes.contains(&new_node) && new_node.id != node.lock().await.id {
+                                all_discovered_nodes.push(new_node.clone());
+                                new_nodes_found = true;
+                            }
+                        }
+                    },
+                    Err(e) => {
+                        eprintln!("Failed to send find_value request to {}: {}", client_addr, e);
+                    }
+                }
             }
+    
+            // Sort and truncate to K closest nodes
+            all_discovered_nodes.sort_by_key(|node| RoutingTable::xor_distance(&node.id, &key));
+            all_discovered_nodes.truncate(K);
+            closest_nodes = all_discovered_nodes.clone();
+        }
+    
+        let proto_nodes = all_discovered_nodes.iter().map(|node_info| ProtoNodeInfo {
+            id: node_info.id.clone().to_vec(),
+            address: node_info.addr.to_string(),
         }).collect::<Vec<_>>();
-
+    
         Ok(Response::new(FindValueResponse {
             value: Vec::new(),
             nodes: proto_nodes,
         }))
     }
+    
 
     pub async fn handle_store(node: Arc<Mutex<Node>>, request: Request<StoreRequest>) -> Result<Response<StoreResponse>, Status> {
         let store_request = request.into_inner();
