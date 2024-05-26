@@ -4,16 +4,18 @@ use crate::auction_server::blockchain_operator::save_blockchain_locally;
 use chrono::Utc;
 use std::sync::Arc;
 use tokio::sync::Mutex;
+const DIFICULTY: usize = 4;
 
 pub async fn block_handler(
     shared_active_blockchains: &mut Arc<Mutex<Vec<Blockchain>>>,
-    block: Block,
-) -> bool {
+    mut block: Block,
+) -> u64 {
     let mut validator_result = false;
     let mut active_blockchains = shared_active_blockchains.lock().await;
     for (i, blockchain) in active_blockchains.clone().iter().enumerate() {
         if blockchain.blocks.last().unwrap().index == block.clone().index - 1 {
             println!("\nUsing main branch");
+            block.mine_block(DIFICULTY);
             validator_result = validator(blockchain.clone(), block.clone()).await;
             if validator_result {
                 if let Some(target_blockchain) = active_blockchains.get_mut(i) {
@@ -40,6 +42,7 @@ pub async fn block_handler(
                 forked_blockchain,
                 block.clone()
             );
+            block.mine_block(DIFICULTY);
             validator_result = validator(forked_blockchain.clone(), block.clone()).await;
             if validator_result {
                 forked_blockchain.blocks.push(block.clone());
@@ -48,7 +51,7 @@ pub async fn block_handler(
             }
         }
     }
-    validator_result
+    block.nounce
 }
 
 pub async fn blockchain_handler(shared_blockchain_vector: &mut Arc<Mutex<Vec<Blockchain>>>) {

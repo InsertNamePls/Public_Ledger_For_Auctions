@@ -24,16 +24,16 @@ pub async fn get_remote_blockchain(
 pub async fn block_peer_validator_client(
     block_to_validate: Block,
     peer: String,
-) -> Result<bool, Box<dyn std::error::Error + Send + Sync>> {
+) -> Result<u64, Box<dyn std::error::Error + Send + Sync>> {
     let mut client = blockchain_client_async(peer).await?;
 
     let block = serde_json::to_string(&block_to_validate).unwrap();
     let request = tonic::Request::new(ProofOfWorkRequest { block });
     let response = client.proof_of_work(request).await?;
 
-    let block_validation: bool = response.into_inner().validation;
+    let nounce_str: String = response.into_inner().validation;
 
-    Ok(block_validation)
+    Ok(nounce_str.parse::<u64>().unwrap())
 }
 
 pub async fn save_blockchain_locally(blockchain: &Blockchain, file_path: &str) {

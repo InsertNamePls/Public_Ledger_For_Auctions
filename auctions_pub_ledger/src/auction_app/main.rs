@@ -290,7 +290,7 @@ async fn create_auction(user: &mut User, dest_ip: &Vec<String>, private_key: Sig
     let duration: i64 = duration_str
         .trim()
         .parse()
-        .expect("Please enter a valid number of days");
+        .expect("Please enter a valid number of minutes");
     let end_time = start_time + Duration::minutes(duration);
 
     get_auction_house(dest_ip)

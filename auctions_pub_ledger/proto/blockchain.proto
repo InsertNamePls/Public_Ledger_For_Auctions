@@ -14,6 +14,6 @@ message RetrieveBlockchainRequest {}
 message RetrieveBlockchainResponse { string blockchain = 1; }
 
 message ProofOfWorkRequest { string block = 1; }
-message ProofOfWorkResponse { bool validation = 1; }
+message ProofOfWorkResponse { string validation = 1; }
 message ProofOfStakePuzzleRequest { string puzzle = 1; }
 message ProofOfStakePuzzleResponse { string result = 1; }

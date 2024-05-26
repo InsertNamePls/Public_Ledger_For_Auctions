@@ -164,7 +164,8 @@ docker exec -it public_ledger_for_auctions-auction1-1  bash
 ```
 4. Execute init blockchain connand to start the server (public_ledger_for_auctions-server1-1) 
 ```bash
-    cargo run --bin auctions_server -- init_blockchain pos
+cargo run --bin auctions_server -- init_blockchain pos
+cargo run --bin auctions_server -- init_blockchain pow
 ```
 5. Execute join command on the remaining servers (public_ledger_for_auctions-server2-1) 
 ```bash
