@@ -3,7 +3,7 @@ use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 use ring::{rand as ring_rand, signature};
 
-use crate::config::REPLAY_WINDOW;
+use crate::config::{REPLAY_WINDOW, NONCE_INTERVAL};
 
 pub struct Crypto {
     receiver_nonces: Mutex<HashMap<Vec<u8>, i64>>, // Store the last nonce received from each ID
@@ -53,7 +53,7 @@ impl Crypto {
         let mut receiver_nonces = self.receiver_nonces.lock().unwrap();
         let id_vec = id.to_vec();
         if let Some(&last_nonce) = receiver_nonces.get(&id_vec) {
-            if nonce <= last_nonce {
+            if nonce < last_nonce - NONCE_INTERVAL || nonce > last_nonce + NONCE_INTERVAL {
                 return false;
             }
         }

@@ -38,4 +38,6 @@ pub const REPLAY_WINDOW: i64 = 120;
 pub const MAX_NODES_PER_IP: usize = 5;
 // The reputation threshold for a node to be removed from the routing table
 pub const REPUTATION_THRESHOLD: i32 = -5;
+// The MAX interval between nonces for a given ID
+pub const NONCE_INTERVAL: i64 = 10;
 //----------------------------------- ATTACK PREVENTION (END) ---------------------------------
