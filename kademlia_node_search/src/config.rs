@@ -10,7 +10,7 @@ pub const PING_TIMER_LOWER: u64 = 5;
 //Number of nodes to ping, for random ping refresh
 pub const N: usize = 5; 
 //Timeout in seconds for each request
-pub const TIMEOUT_TIMER: u64 = 100;
+pub const TIMEOUT_TIMER: u64 = 3;
 //Maximum number of attempts for each request for timeout
 pub const TIMEOUT_MAX_ATTEMPTS: u64 = 3;
 //----------------------------------- KADEMLIA CONFIGURATION (END) ----------------------------
@@ -25,7 +25,7 @@ pub const N_BITS: usize = 160;
 
 //----------------------------------- NODE GENERATION (BEGIN) ---------------------------------
 //Leading zero bits for node ID generation
-pub const C1: u32 = 1;
+pub const C1: u32 = 14;
 //Number of attempts it takes to log elapsed time for node generation
 pub const LOG_INTERVAL: u64 = 10_000;
 //----------------------------------- NODE GENERATION (END) -----------------------------------
@@ -38,4 +38,6 @@ pub const REPLAY_WINDOW: i64 = 120;
 pub const MAX_NODES_PER_IP: usize = 5;
 // The reputation threshold for a node to be removed from the routing table
 pub const REPUTATION_THRESHOLD: i32 = -5;
+// The MAX interval between nonces for a given ID
+pub const NONCE_INTERVAL: i64 = 10;
 //----------------------------------- ATTACK PREVENTION (END) ---------------------------------
