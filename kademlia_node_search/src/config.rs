@@ -10,7 +10,7 @@ pub const PING_TIMER_LOWER: u64 = 5;
 //Number of nodes to ping, for random ping refresh
 pub const N: usize = 5; 
 //Timeout in seconds for each request
-pub const TIMEOUT_TIMER: u64 = 3;
+pub const TIMEOUT_TIMER: u64 = 100;
 //Maximum number of attempts for each request for timeout
 pub const TIMEOUT_MAX_ATTEMPTS: u64 = 3;
 //----------------------------------- KADEMLIA CONFIGURATION (END) ----------------------------
@@ -25,7 +25,7 @@ pub const N_BITS: usize = 160;
 
 //----------------------------------- NODE GENERATION (BEGIN) ---------------------------------
 //Leading zero bits for node ID generation
-pub const C1: u32 = 14;
+pub const C1: u32 = 1;
 //Number of attempts it takes to log elapsed time for node generation
 pub const LOG_INTERVAL: u64 = 10_000;
 //----------------------------------- NODE GENERATION (END) -----------------------------------
