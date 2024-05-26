@@ -1,6 +1,5 @@
-use crate::kademlia_node_search::config::{K, MAX_NODES_PER_IP, N_BITS, REPUTATION_THRESHOLD};
-
 use crate::kademlia::NodeInfo as ProtoNodeInfo;
+use crate::kademlia_node_search::config::{K, MAX_NODES_PER_IP, N_BITS, REPUTATION_THRESHOLD};
 use bytes::Bytes;
 use colored::Colorize;
 use rand::seq::IteratorRandom;
@@ -11,7 +10,7 @@ use std::net::SocketAddr;
 #[derive(Clone, Debug)]
 pub struct NodeInfo {
     pub(crate) id: Bytes,
-    pub addr: SocketAddr,
+    pub(crate) addr: SocketAddr,
     pub(crate) reputation: i32,
 }
 
@@ -22,6 +21,12 @@ impl NodeInfo {
             addr,
             reputation: 0,
         }
+    }
+}
+
+impl PartialEq for NodeInfo {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
     }
 }
 
@@ -71,7 +76,7 @@ impl RoutingTable {
         xor_distance.leading_zeros() as usize % N_BITS
     }
 
-    fn xor_distance(id1: &Bytes, id2: &Bytes) -> u128 {
+    pub fn xor_distance(id1: &Bytes, id2: &Bytes) -> u128 {
         let mut result = 0;
         for (byte1, byte2) in id1.iter().zip(id2.iter()) {
             result = (result << 8) | (*byte1 ^ *byte2) as u128;
@@ -178,6 +183,21 @@ impl RoutingTable {
             nodes.push(node_info);
         }
         nodes
+    }
+
+    pub fn get_node(&self, target_id: &Bytes) -> Option<NodeInfo> {
+        self.buckets
+            .iter()
+            .flat_map(|bucket| &bucket.nodes)
+            .find(|node_info| &node_info.id == target_id)
+            .cloned()
+    }
+
+    pub fn get_all_nodes(&self) -> Vec<NodeInfo> {
+        self.buckets
+            .iter()
+            .flat_map(|bucket| bucket.nodes.clone())
+            .collect()
     }
 
     pub fn random_node(&self) -> Option<&NodeInfo> {
